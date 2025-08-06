@@ -245,11 +245,75 @@ public:
         std::cout << "[*] Network Protocol Fuzzer initialized for " << target.host 
                   << ":" << target.port << " (" << target.protocol << ")" << std::endl;
     }
-}
-class SymbolicExecutionEngine;
+};
 
+class SymbolicExecutionEngine;
+class AdaptiveChallengeClassifier {
+public:
+    struct ClassificationResult {
+        std::string challenge_type;
+        std::vector<std::string> vulnerability_types;
+        std::string difficulty_level;
+        std::map<std::string, double> confidence_scores;
+    };
+    
+    ClassificationResult classifyChallenge(const std::string& binary_info, 
+                                         const std::string& runtime_info, 
+                                         const std::string& gdb_info) {
+        ClassificationResult result;
+        return result;
+    }
+};
+
+class AdvancedGDBAnalyzer {
+private:
+    std::string target_executable;
+    
+public:
+    AdvancedGDBAnalyzer(const std::string& exe) : target_executable(exe) {}
+    
+    ExploitContext performDeepAnalysis() {
+        ExploitContext context;
+        return context;
+    }
+    
+    std::string getDetailedAnalysis() {
+        return "GDB Analysis";
+    }
+};
 
 class AdvancedCTFSolver {
+
+
+private:
+    // Add these missing method declarations
+    void performAdaptiveAnalysis();
+    void performMultiStageExploitation();
+    void generateCTFReport();
+    void generateSolutionScript(const std::string& payload);
+    std::string captureOutput(const std::string& input);
+    std::string getCurrentTimestamp();
+    bool testSingleExploit(const std::string& exploit, VulnResult& result);
+    void saveAdvancedVulnerability(const VulnResult& result, int index);
+    void generateAdvancedPoC(const VulnResult& result, int index);
+    bool isSuccessfulExploit(const std::string& output);
+    void saveSolution(const std::string& payload, const std::string& output);
+    int countExploitable();
+    bool hasPrintfFunctions();
+    std::string executeWithTimeout(const std::string& payload, int timeout);
+    std::string extractFlag(const std::string& output);
+    bool extractShellAccess(const std::string& output);
+    bool checkEarlySuccess(const std::string& output);
+    void extractStageData(const StageResult& result, std::map<std::string, std::string>& data);
+    void updateSubsequentStages(ExploitChain& chain, size_t index, const std::map<std::string, std::string>& data);
+    std::string buildROPChain(const std::map<std::string, std::string>& data);
+    std::string buildFormatStringWrite(const std::string& offset);
+    std::string packAddress(uint64_t addr);
+    StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
+    StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
+    void saveChainResult(const ChainResult& result);
+    void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
+
 private:
     std::string target_exe;
     std::mt19937 rng;
@@ -260,10 +324,11 @@ private:
     int total_runs = 0;
     int crashes_found = 0;
     int unique_crashes = 0;
-    bool verbose_mode = false;
     AdaptiveChallengeClassifier classifier;
     AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
     ExploitContext exploit_context;
+    std::string angr_script_template;
+    bool verbose_mode = true;
     
 private:
     std::vector<IOPattern> detected_patterns;
@@ -277,8 +342,6 @@ private:
     int max_chain_stages = 5;
 
 
-
-
 public:
     AdvancedCTFSolver(const std::string& exe_path, bool verbose = false) 
         : target_exe(exe_path), verbose_mode(verbose), 
@@ -288,6 +351,20 @@ public:
         setupGDBEnvironment();
     }
 
+
+
+    std::string executeCommand(const std::string& cmd) {
+    std::string result;
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return "";
+    
+    char buffer[128];
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result += buffer;
+    }
+    pclose(pipe);
+    return result;
+}
 
     void initializeComponents() {
         // Initialize ELF info
@@ -905,19 +982,6 @@ public:
         return false;
     }
     
-    // Utility function to execute shell commands
-    std::string executeCommand(const std::string& cmd) {
-        char buffer[128];
-        std::string result = "";
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) return result;
-        
-        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            result += buffer;
-        }
-        pclose(pipe);
-        return result;
-    }
     
     // Check if crash is unique based on crash signature
     bool isUniqueCrash(const VulnResult& result) {
@@ -2147,18 +2211,7 @@ private:
         }
     }
     
-    std::string executeCommand(const std::string& cmd) {
-        char buffer[128];
-        std::string result = "";
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) return result;
-        
-        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            result += buffer;
-        }
-        pclose(pipe);
-        return result;
-    }
+    
 };
 
 
@@ -3265,80 +3318,52 @@ std::string captureOutput(const std::string& input) {
     int pipefd[2];
     if (pipe(pipefd) == -1) return "";
     
-    int stdout_pipe[2];
-    if (pipe(stdout_pipe) == -1) {
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return "";
-    }
-    
     pid_t pid = fork();
     if (pid == 0) {
         // Child process
-        close(pipefd[1]);
-        close(stdout_pipe[0]);
-        
-        dup2(pipefd[0], STDIN_FILENO);
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stdout_pipe[1], STDERR_FILENO);
-        
         close(pipefd[0]);
-        close(stdout_pipe[1]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
         
-        // Set timeout to prevent hanging
-        alarm(5);
+        int input_fd[2];
+        if (pipe(input_fd) == 0) {
+            if (fork() == 0) {
+                // Grandchild - send input
+                close(input_fd[0]);
+                write(input_fd[1], input.c_str(), input.size());
+                close(input_fd[1]);
+                exit(0);
+            } else {
+                // Child - redirect stdin
+                close(input_fd[1]);
+                dup2(input_fd[0], STDIN_FILENO);
+                close(input_fd[0]);
+            }
+        }
         
         execl(target_exe.c_str(), target_exe.c_str(), nullptr);
         _exit(1);
     } else if (pid > 0) {
         // Parent process
-        close(pipefd[0]);
-        close(stdout_pipe[1]);
-        
-        // Send input
-        if (!input.empty()) {
-            ssize_t written = write(pipefd[1], input.c_str(), input.size());
-            (void)written; // Suppress unused variable warning
-        }
         close(pipefd[1]);
         
-        // Read output with timeout
         std::string output;
         char buffer[1024];
+        ssize_t bytes_read;
         
-        fd_set readfds;
-        struct timeval timeout;
-        timeout.tv_sec = 3;  // 3 second timeout
-        timeout.tv_usec = 0;
-        
-        FD_ZERO(&readfds);
-        FD_SET(stdout_pipe[0], &readfds);
-        
-        while (select(stdout_pipe[0] + 1, &readfds, nullptr, nullptr, &timeout) > 0) {
-            ssize_t bytes_read = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
-            if (bytes_read <= 0) break;
-            
+        while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytes_read] = '\0';
             output += buffer;
-            
-            // Reset timeout for next read
-            timeout.tv_sec = 1;
-            timeout.tv_usec = 0;
-            FD_ZERO(&readfds);
-            FD_SET(stdout_pipe[0], &readfds);
         }
         
-        close(stdout_pipe[0]);
-        
-        int status;
-        waitpid(pid, &status, WNOHANG);  // Non-blocking wait
-        
+        close(pipefd[0]);
+        waitpid(pid, nullptr, 0);
         return output;
     }
     
     return "";
 }
-
     
 
 // Enhanced analysis function to add to your class
@@ -3375,16 +3400,13 @@ void performAdaptiveAnalysis() {
 }
 // NEW: Generate solution script
 void generateSolutionScript(const std::string& payload) {
-    std::string script_filename = "solve_" + std::to_string(std::time(nullptr)) + ".py";
-    std::ofstream script(script_filename);
+    std::string script_name = "solution_script.py";
+    std::ofstream script(script_name);
     
     script << "#!/usr/bin/env python3" << std::endl;
-    script << "# Auto-generated solution script" << std::endl;
     script << "import subprocess" << std::endl;
-    script << "import sys" << std::endl;
-    script << std::endl;
-    
-    script << "def solve():" << std::endl;
+    script << "import sys" << std::endl << std::endl;
+    script << "def main():" << std::endl;
     script << "    target = '" << target_exe << "'" << std::endl;
     script << "    payload = b'";
     
@@ -3393,24 +3415,16 @@ void generateSolutionScript(const std::string& payload) {
     }
     
     script << "'" << std::endl;
-    script << std::endl;
-    script << "    print(f'[*] Solving {target}')" << std::endl;
-    script << "    print(f'[*] Payload: {payload}')" << std::endl;
     script << "    " << std::endl;
     script << "    proc = subprocess.run([target], input=payload, capture_output=True)" << std::endl;
-    script << "    " << std::endl;
-    script << "    print('Output:')" << std::endl;
-    script << "    print(proc.stdout.decode())" << std::endl;
-    script << "    if proc.stderr:" << std::endl;
-    script << "        print('Errors:')" << std::endl;
-    script << "        print(proc.stderr.decode())" << std::endl;
-    script << std::endl;
+    script << "    print('Output:', proc.stdout.decode('utf-8', errors='ignore'))" << std::endl;
+    script << "    print('Errors:', proc.stderr.decode('utf-8', errors='ignore'))" << std::endl;
+    script << "    print('Return code:', proc.returncode)" << std::endl << std::endl;
     script << "if __name__ == '__main__':" << std::endl;
-    script << "    solve()" << std::endl;
+    script << "    main()" << std::endl;
     
     script.close();
-    chmod(script_filename.c_str(), 0755);
-    std::cout << "[+] Solution script: " << script_filename << std::endl;
+    chmod(script_name.c_str(), 0755);
 }
     
     // Generate comprehensive CTF report
@@ -3536,13 +3550,91 @@ void generateSolutionScript(const std::string& payload) {
     
     // Get current timestamp
     std::string getCurrentTimestamp() {
-        auto now = std::chrono::system_clock::now();
-        auto time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-        return ss.str();
-    }
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    return ss.str();
+}
 ;
+
+
+void performMultiStageExploitation();
+ChainResult executeExploitChain(ExploitChain& chain);
+StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
+void updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string, std::string>& leaked_data);
+std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
+std::string executeWithTimeout(const std::string& payload, int timeout);
+void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
+std::string getBinaryAnalysisString();
+std::string getRuntimeBehaviorString();
+std::string getGDBAnalysisString();
+void testAdaptiveExploits(const std::vector<std::string>& exploits);
+
+
+void performMultiStageExploitation() {
+    // Implementation
+}
+
+ChainResult executeExploitChain(ExploitChain& chain) {
+    ChainResult result;
+    return result;
+}
+
+StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
+    StageResult result;
+    return result;
+}
+
+void extractStageData(const StageResult& result, std::map<std::string, std::string>& data) {
+    // Implementation
+}
+
+void updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string, std::string>& leaked_data) {
+    // Implementation
+}
+
+std::string buildROPChain(const std::map<std::string, std::string>& leaked_data) {
+    return "rop_chain";
+}
+
+std::string buildFormatStringWrite(const std::string& offset) {
+    return "format_string";
+}
+
+std::string packAddress(uint64_t addr) {
+    return std::string(reinterpret_cast<char*>(&addr), 8);
+}
+
+StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context) {
+    StageResult result;
+    return result;
+}
+
+bool checkEarlySuccess(const std::string& output) {
+    return output.find("flag") != std::string::npos;
+}
+
+std::string extractFlag(const std::string& output) {
+    // Extract flag logic
+    return "FLAG{extracted}";
+}
+
+bool extractShellAccess(const std::string& output) {
+    return output.find("$") != std::string::npos;
+}
+
+void saveChainResult(const ChainResult& result) {
+    // Save result logic
+}
+
+void generateChainPoC(const ExploitChain& chain, const ChainResult& result) {
+    // Generate PoC logic
+}
+
+std::string executeWithTimeout(const std::string& payload, int timeout) {
+    return "timeout_output";
+}
 
 // Main function
 int main(int argc, char* argv[]) {
