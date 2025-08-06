@@ -30,53 +30,10 @@
 #include <netinet/udp.h>
 #include <netinet/ip.h>
 
-
-
-
-std::string target_exe;
-ELFInfo elf_info;
-ExploitContext exploit_context;
-bool multi_stage_mode = false;
-bool verbose_mode = false;
-std::vector<ExploitChain> exploit_chains;
-std::vector<VulnResult> vulnerabilities;
-std::vector<std::string> successful_exploits;
-std::map<std::string, std::string> leaked_data;
-AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
-AdaptiveChallengeClassifier classifier;
-int total_runs = 0;
-int crashes_found = 0;
-int unique_crashes = 0;
-
-
-
-std::string executeWithTimeout(const std::string& payload, int timeout_seconds);
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
-void extractStageData(const StageResult& result, std::map<std::string, std::string>& leaked_data);
-void updateSubsequentStages(ExploitChain& chain, size_t stage_index, const std::map<std::string, std::string>& leaked_data);
-bool checkEarlySuccess(const std::string& output);
-std::string extractFlag(const std::string& output);
-bool extractShellAccess(const std::string& output);
-StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
-std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
-std::string buildFormatStringWrite(const std::string& offset);
-std::string packAddress(uint64_t address);
-void saveChainResult(const ChainResult& result);
-void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
-std::string captureOutput(const std::string& input);
-bool testSingleExploit(const std::string& exploit, VulnResult& result);
-bool isSuccessfulExploit(const std::string& output);
-void saveAdvancedVulnerability(const VulnResult& result, int index);
-void generateAdvancedPoC(const VulnResult& result, int index);
-void generateSolutionScript(const std::string& exploit);
-std::string getCurrentTimestamp();
-int countExploitable();
-bool hasPrintfFunctions();
-
-
 class SymbolicExecutionEngine;
-class AdaptiveChallengeClassifier;
+class AdaptiveChallengeClassifier;  
 class AdvancedGDBAnalyzer;
+class ExploitChainBuilder;
 
 struct ELFInfo {
     bool is_64bit = false;
@@ -269,6 +226,46 @@ struct StageResult {
     int signal_num = 0;
 };
 
+std::string target_exe;
+ELFInfo elf_info;
+ExploitContext exploit_context;
+bool multi_stage_mode = false;
+bool verbose_mode = false;
+std::vector<ExploitChain> exploit_chains;
+std::vector<VulnResult> vulnerabilities;
+std::vector<std::string> successful_exploits;
+std::map<std::string, std::string> leaked_data;
+AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
+AdaptiveChallengeClassifier classifier;
+int total_runs = 0;
+int crashes_found = 0;
+int unique_crashes = 0;
+
+
+
+std::string executeWithTimeout(const std::string& payload, int timeout_seconds);
+StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
+void extractStageData(const StageResult& result, std::map<std::string, std::string>& leaked_data);
+void updateSubsequentStages(ExploitChain& chain, size_t stage_index, const std::map<std::string, std::string>& leaked_data);
+bool checkEarlySuccess(const std::string& output);
+std::string extractFlag(const std::string& output);
+bool extractShellAccess(const std::string& output);
+StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
+std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
+std::string buildFormatStringWrite(int offset);
+std::string packAddress(uint64_t address);
+void saveChainResult(const ChainResult& result);
+void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
+std::string captureOutput(const std::string& input);
+bool testSingleExploit(const std::string& exploit, VulnResult& result);
+bool isSuccessfulExploit(const std::string& output);
+void saveAdvancedVulnerability(const VulnResult& result, int index);
+void generateAdvancedPoC(const VulnResult& result, int index);
+void generateSolutionScript(const std::string& exploit);
+std::string getCurrentTimestamp();
+int countExploitable();
+bool hasPrintfFunctions();
+
 // Network Protocol Fuzzer Class
 class NetworkProtocolFuzzer {
 private:
@@ -350,7 +347,7 @@ private:
     void extractStageData(const StageResult& result, std::map<std::string, std::string>& data);
     void updateSubsequentStages(ExploitChain& chain, size_t index, const std::map<std::string, std::string>& data);
     std::string buildROPChain(const std::map<std::string, std::string>& data);
-    std::string buildFormatStringWrite(const std::string& offset);
+    std::string buildFormatStringWrite(int offset);
     std::string packAddress(uint64_t addr);
     StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
     StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
@@ -416,24 +413,8 @@ public:
     pclose(pipe);
     return result;
 }
-class SymbolicExecutionEngine {
-private:
-    std::string target_binary;
-    
-public:
-    SymbolicExecutionEngine(const std::string& binary) : target_binary(binary) {}
-    ~SymbolicExecutionEngine() {}
-    
-    void findFlagStrings(std::vector<std::string>& results) {
-        // Implementation for symbolic execution
-        // This would typically use a symbolic execution framework like KLEE or angr
-    }
-    
-    bool analyzeConstraints(const std::string& input) {
-        // Analyze symbolic constraints
-        return false;
-    }
-};
+
+
     void initializeComponents() {
         // Initialize ELF info
         analyzeELF();
@@ -2781,7 +2762,8 @@ std::string buildROPChain(const std::map<std::string, std::string>& leaked_data)
 }
 
 std::string buildFormatStringWrite(int offset) {
-     return "%" + offset + "$p";
+     return "%" + std::to_string(offset) + "$p";
+
 }
 
 bool checkEarlySuccess(const std::string& output) {
@@ -2809,15 +2791,6 @@ std::string extractFlag(const std::string& output) {
     return "";
 }
 
-std::string extractShellAccess(const std::string& output) {
-    if (output.find("$") != std::string::npos || 
-        output.find("shell") != std::string::npos ||
-        output.find("bash") != std::string::npos) {
-        return "shell_access_detected";
-    }
-    
-    return "";
-}
 
 std::string executeWithTimeout(const std::string& payload, int timeout_seconds) {
     // Similar to captureOutput but with configurable timeout
