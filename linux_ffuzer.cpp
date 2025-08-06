@@ -33,6 +33,11 @@
 
 
 
+
+class SymbolicExecutionEngine;
+class AdaptiveChallengeClassifier;
+class AdvancedGDBAnalyzer;
+
 struct ELFInfo {
     bool is_64bit = false;
     bool has_canary = false;
@@ -281,8 +286,12 @@ public:
     }
 };
 
-class AdvancedCTFSolver {
 
+
+
+class AdvancedCTFSolver {
+private:
+    SymbolicExecutionEngine* symbolic_engine = nullptr;
 
 private:
     // Add these missing method declarations
@@ -337,6 +346,9 @@ private:
     int max_chain_stages = 5;
 
 
+
+
+
 public:
     AdvancedCTFSolver(const std::string& exe_path, bool verbose = false) 
         : target_exe(exe_path), verbose_mode(verbose), 
@@ -360,7 +372,24 @@ public:
     pclose(pipe);
     return result;
 }
-
+class SymbolicExecutionEngine {
+private:
+    std::string target_binary;
+    
+public:
+    SymbolicExecutionEngine(const std::string& binary) : target_binary(binary) {}
+    ~SymbolicExecutionEngine() {}
+    
+    void findFlagStrings(std::vector<std::string>& results) {
+        // Implementation for symbolic execution
+        // This would typically use a symbolic execution framework like KLEE or angr
+    }
+    
+    bool analyzeConstraints(const std::string& input) {
+        // Analyze symbolic constraints
+        return false;
+    }
+};
     void initializeComponents() {
         // Initialize ELF info
         analyzeELF();
@@ -994,7 +1023,6 @@ public:
     }
     
 private:
-    SymbolicExecutionEngine* symbolic_engine = nullptr;
     std::vector<SymbolicResult> symbolic_results;
 
 public:
@@ -1488,7 +1516,8 @@ bool testPatternSolutions() {
 }
 
 // NEW: Save successful solution
-void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::string& output) {
+void saveSolution(const std::string& payload, const std::string& output) {
+
 
     std::string filename = "solution_" + std::to_string(std::time(nullptr)) + ".txt";
     std::ofstream file(filename);
