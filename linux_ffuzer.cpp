@@ -1543,7 +1543,7 @@ bool testPatternSolutions() {
 }
 
 // NEW: Save successful solution
-void saveSolution(const std::string& payload, const std::string& output) {
+void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::string& output) {
 
 
     std::string filename = "solution_" + std::to_string(std::time(nullptr)) + ".txt";
@@ -3613,16 +3613,8 @@ std::string getRuntimeBehaviorString();
 std::string getGDBAnalysisString();
 void testAdaptiveExploits(const std::vector<std::string>& exploits);
 
-std::string executeWithTimeout(const std::string& payload, int timeout_seconds) {
-    // Implementation here
-    return "";
-}
 
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
-    // Implementation here
-    StageResult result;
-    return result;
-}
+
 // Main function
 int main(int argc, char* argv[]) {
     if (argc < 2) {
