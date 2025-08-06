@@ -200,6 +200,30 @@ struct PacketStructure {
     size_t checksum_offset = 0;
 };
 
+struct ExploitContext {
+    std::string target_arch;
+    std::map<std::string, bool> mitigations;
+    std::vector<uint64_t> gadget_addresses;
+    std::vector<std::string> exploitable_functions;
+    std::map<std::string, uint64_t> symbol_table;
+    std::string libc_version;
+    bool has_aslr = false;
+    bool has_dep = false;
+    bool has_seh = false;
+    std::vector<uint64_t> rop_chain;
+    std::string exploit_strategy = "unknown";
+};
+
+
+struct StageResult {
+    bool successful = false;
+    std::string output;
+    std::string error;
+    std::map<std::string, std::string> extracted_data;
+    int exit_code = 0;
+    int signal_num = 0;
+};
+
 // Network Protocol Fuzzer Class
 class NetworkProtocolFuzzer {
 private:
@@ -221,7 +245,7 @@ public:
         std::cout << "[*] Network Protocol Fuzzer initialized for " << target.host 
                   << ":" << target.port << " (" << target.protocol << ")" << std::endl;
     }
-
+}
 class SymbolicExecutionEngine;
 
 
@@ -237,6 +261,9 @@ private:
     int crashes_found = 0;
     int unique_crashes = 0;
     bool verbose_mode = false;
+    AdaptiveChallengeClassifier classifier;
+    AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
+    ExploitContext exploit_context;
     
 private:
     std::vector<IOPattern> detected_patterns;
@@ -261,6 +288,14 @@ public:
         setupGDBEnvironment();
     }
 
+
+    void initializeComponents() {
+        // Initialize ELF info
+        analyzeELF();
+        
+        // Initialize symbolic execution
+        initializeSymbolicExecution();
+    }
     // Comprehensive ELF analysis
     void analyzeELF() {
         std::cout << "[*] Performing comprehensive ELF analysis..." << std::endl;
@@ -1425,19 +1460,8 @@ void saveSolution(const std::string& payload, const std::string& output) {
     file.close();
     std::cout << "[+] Solution saved to: " << filename << std::endl;
 }
-struct ExploitContext {
-    std::string target_arch;
-    std::map<std::string, bool> mitigations;
-    std::vector<uint64_t> gadget_addresses;
-    std::vector<std::string> exploitable_functions;
-    std::map<std::string, uint64_t> symbol_table;
-    std::string libc_version;
-    bool has_aslr = false;
-    bool has_dep = false;
-    bool has_seh = false;
-    std::vector<uint64_t> rop_chain;
-    std::string exploit_strategy = "unknown";
-};
+
+
 
 // AI-driven challenge classification system
 class AdaptiveChallengeClassifier {
@@ -2483,14 +2507,7 @@ ChainResult executeExploitChain(ExploitChain& chain) {
     return result;
 }
 
-struct StageResult {
-    bool successful = false;
-    std::string output;
-    std::string error;
-    std::map<std::string, std::string> extracted_data;
-    int exit_code = 0;
-    int signal_num = 0;
-};
+
 
 StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
     StageResult result;
@@ -3322,9 +3339,7 @@ std::string captureOutput(const std::string& input) {
     return "";
 }
 
-AdaptiveChallengeClassifier classifier;
-AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
-ExploitContext exploit_context;
+    
 
 // Enhanced analysis function to add to your class
 void performAdaptiveAnalysis() {
@@ -3527,7 +3542,7 @@ void generateSolutionScript(const std::string& payload) {
         ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
         return ss.str();
     }
-};
+;
 
 // Main function
 int main(int argc, char* argv[]) {
@@ -3567,4 +3582,3 @@ int main(int argc, char* argv[]) {
     }
     
     return 0;}
-}
