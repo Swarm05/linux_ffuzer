@@ -344,7 +344,6 @@ private:
     bool testSingleExploit(const std::string& exploit, VulnResult& result);
     bool isSuccessfulExploit(const std::string& output);
     void saveSolution(const std::string& payload, const std::string& output);
-    std::string executeWithTimeout(const std::string& payload, int timeout);
     std::string extractFlag(const std::string& output);
     bool extractShellAccess(const std::string& output);
     bool checkEarlySuccess(const std::string& output);
@@ -386,7 +385,12 @@ private:
     int max_chain_stages = 5;
 
 
-
+bool extractShellAccess(const std::string& output) {
+    return output.find("$ ") != std::string::npos ||
+           output.find("# ") != std::string::npos ||
+           output.find("sh-") != std::string::npos ||
+           output.find("/bin/sh") != std::string::npos;
+}
 
 
 public:
@@ -504,6 +508,8 @@ public:
         elf_info.has_fortify = !output.empty();
     }
     
+    
+
     void extractFunctions() {
         std::cout << "[*] Extracting function symbols..." << std::endl;
         
@@ -2775,7 +2781,7 @@ std::string buildROPChain(const std::map<std::string, std::string>& leaked_data)
 }
 
 std::string buildFormatStringWrite(int offset) {
-    return "%" + std::to_string(offset) + "$n";
+     return "%" + offset + "$p";
 }
 
 bool checkEarlySuccess(const std::string& output) {
@@ -3625,7 +3631,6 @@ void generateSolutionScript(const std::string& payload) {
 
 void performMultiStageExploitation();
 ChainResult executeExploitChain(ExploitChain& chain);
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
 void updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string, std::string>& leaked_data);
 std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
 std::string executeWithTimeout(const std::string& payload, int timeout);
