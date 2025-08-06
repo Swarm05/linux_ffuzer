@@ -247,7 +247,6 @@ public:
     }
 };
 
-class SymbolicExecutionEngine;
 class AdaptiveChallengeClassifier {
 public:
     struct ClassificationResult {
@@ -294,12 +293,8 @@ private:
     std::string captureOutput(const std::string& input);
     std::string getCurrentTimestamp();
     bool testSingleExploit(const std::string& exploit, VulnResult& result);
-    void saveAdvancedVulnerability(const VulnResult& result, int index);
-    void generateAdvancedPoC(const VulnResult& result, int index);
     bool isSuccessfulExploit(const std::string& output);
     void saveSolution(const std::string& payload, const std::string& output);
-    int countExploitable();
-    bool hasPrintfFunctions();
     std::string executeWithTimeout(const std::string& payload, int timeout);
     std::string extractFlag(const std::string& output);
     bool extractShellAccess(const std::string& output);
@@ -1493,7 +1488,8 @@ bool testPatternSolutions() {
 }
 
 // NEW: Save successful solution
-void saveSolution(const std::string& payload, const std::string& output) {
+void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::string& output) {
+
     std::string filename = "solution_" + std::to_string(std::time(nullptr)) + ".txt";
     std::ofstream file(filename);
     
@@ -2064,8 +2060,8 @@ if __name__ == "__main__":
         chmod(script_file.c_str(), 0755);
         
         // Build command
-        std::string cmd = "python3 " + script_file + " " + target_binary;
-        
+        std::string cmd = "python3 " + script_file + " " + target_exe;
+
         if (!find_address.empty()) {
             cmd += " " + find_address;
         } else {
@@ -3571,70 +3567,6 @@ std::string getRuntimeBehaviorString();
 std::string getGDBAnalysisString();
 void testAdaptiveExploits(const std::vector<std::string>& exploits);
 
-
-void performMultiStageExploitation() {
-    // Implementation
-}
-
-ChainResult executeExploitChain(ExploitChain& chain) {
-    ChainResult result;
-    return result;
-}
-
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
-    StageResult result;
-    return result;
-}
-
-void extractStageData(const StageResult& result, std::map<std::string, std::string>& data) {
-    // Implementation
-}
-
-void updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string, std::string>& leaked_data) {
-    // Implementation
-}
-
-std::string buildROPChain(const std::map<std::string, std::string>& leaked_data) {
-    return "rop_chain";
-}
-
-std::string buildFormatStringWrite(const std::string& offset) {
-    return "format_string";
-}
-
-std::string packAddress(uint64_t addr) {
-    return std::string(reinterpret_cast<char*>(&addr), 8);
-}
-
-StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context) {
-    StageResult result;
-    return result;
-}
-
-bool checkEarlySuccess(const std::string& output) {
-    return output.find("flag") != std::string::npos;
-}
-
-std::string extractFlag(const std::string& output) {
-    // Extract flag logic
-    return "FLAG{extracted}";
-}
-
-bool extractShellAccess(const std::string& output) {
-    return output.find("$") != std::string::npos;
-}
-
-void saveChainResult(const ChainResult& result) {
-    // Save result logic
-}
-
-void generateChainPoC(const ExploitChain& chain, const ChainResult& result) {
-    // Generate PoC logic
-}
-
-std::string executeWithTimeout(const std::string& payload, int timeout) {
-    return "timeout_output";
-}
 
 // Main function
 int main(int argc, char* argv[]) {
