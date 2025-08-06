@@ -33,6 +33,46 @@
 
 
 
+std::string target_exe;
+ELFInfo elf_info;
+ExploitContext exploit_context;
+bool multi_stage_mode = false;
+bool verbose_mode = false;
+std::vector<ExploitChain> exploit_chains;
+std::vector<VulnResult> vulnerabilities;
+std::vector<std::string> successful_exploits;
+std::map<std::string, std::string> leaked_data;
+AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
+AdaptiveChallengeClassifier classifier;
+int total_runs = 0;
+int crashes_found = 0;
+int unique_crashes = 0;
+
+
+
+std::string executeWithTimeout(const std::string& payload, int timeout_seconds);
+StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
+void extractStageData(const StageResult& result, std::map<std::string, std::string>& leaked_data);
+void updateSubsequentStages(ExploitChain& chain, size_t stage_index, const std::map<std::string, std::string>& leaked_data);
+bool checkEarlySuccess(const std::string& output);
+std::string extractFlag(const std::string& output);
+bool extractShellAccess(const std::string& output);
+StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
+std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
+std::string buildFormatStringWrite(const std::string& offset);
+std::string packAddress(uint64_t address);
+void saveChainResult(const ChainResult& result);
+void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
+std::string captureOutput(const std::string& input);
+bool testSingleExploit(const std::string& exploit, VulnResult& result);
+bool isSuccessfulExploit(const std::string& output);
+void saveAdvancedVulnerability(const VulnResult& result, int index);
+void generateAdvancedPoC(const VulnResult& result, int index);
+void generateSolutionScript(const std::string& exploit);
+std::string getCurrentTimestamp();
+int countExploitable();
+bool hasPrintfFunctions();
+
 
 class SymbolicExecutionEngine;
 class AdaptiveChallengeClassifier;
@@ -3580,8 +3620,7 @@ void generateSolutionScript(const std::string& payload) {
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
     return ss.str();
-}
-;
+};
 
 
 void performMultiStageExploitation();
@@ -3596,7 +3635,16 @@ std::string getRuntimeBehaviorString();
 std::string getGDBAnalysisString();
 void testAdaptiveExploits(const std::vector<std::string>& exploits);
 
+std::string executeWithTimeout(const std::string& payload, int timeout_seconds) {
+    // Implementation here
+    return "";
+}
 
+StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
+    // Implementation here
+    StageResult result;
+    return result;
+}
 // Main function
 int main(int argc, char* argv[]) {
     if (argc < 2) {
