@@ -1162,14 +1162,6 @@ private:
     int max_chain_stages = 5;
 
 
-bool extractShellAccess(const std::string& output) {
-    return output.find("$ ") != std::string::npos ||
-           output.find("# ") != std::string::npos ||
-           output.find("sh-") != std::string::npos ||
-           output.find("/bin/sh") != std::string::npos;
-}
-
-
 public:
     AdvancedCTFSolver(const std::string& exe_path, bool verbose = false) 
         : target_exe(exe_path), verbose_mode(verbose), 
