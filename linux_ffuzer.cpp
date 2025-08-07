@@ -2471,7 +2471,7 @@ bool testPatternSolutions() {
 }
 
 // NEW: Save successful solution
-void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::string& output) {
+void saveSolution(const std::string& payload, const std::string& output) {
 
 
     std::string filename = "solution_" + std::to_string(std::time(nullptr)) + ".txt";
@@ -3413,7 +3413,8 @@ void performAdaptiveAnalysis() {
               << " adaptive exploit attempts" << std::endl;
     
     // Step 4: Test exploits
-    testAdaptiveExploits(adaptive_exploits);
+    this->testAdaptiveExploits(adaptive_exploits);
+
 }
 // NEW: Generate solution script
 void generateSolutionScript(const std::string& payload) {
